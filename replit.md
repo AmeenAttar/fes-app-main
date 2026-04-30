@@ -30,8 +30,10 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 
 - **`artifacts/api-server`** — Express 5 API.
   - `/api/investigators` and `/api/investigators/:slug` scrape the Cleveland FES Center
-    WordPress site (`https://fescenter.org/test/team/investigators/`) for the investigator list
+    WordPress site (`${FESCENTER_BASE_URL}/team/investigators/`) for the investigator list
     and detail pages (title, hero image, bio paragraphs). Cached 10 minutes in-memory.
+    `FESCENTER_BASE_URL` defaults to `https://fescenter.org/test`; set it in env to switch
+    sites (e.g. when the FES Center drops `/test/`). See `src/lib/config.ts`.
   - `/api/events` parses the FES Center public Google Calendar iCal feed (`fescalendar@fescenter.org`)
     using `node-ical`, expands recurring events, and returns upcoming events for the next year.
     Cached 5 minutes in-memory.

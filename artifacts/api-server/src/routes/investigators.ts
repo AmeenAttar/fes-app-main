@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
+import { INVESTIGATORS_LIST_URL } from "../lib/config";
 
 const router: IRouter = Router();
 
-const SOURCE_URL = "https://fescenter.org/test/team/investigators/";
+const SOURCE_URL = INVESTIGATORS_LIST_URL;
 const BROWSER_HEADERS: Record<string, string> = {
   "User-Agent":
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",

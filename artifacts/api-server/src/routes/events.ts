@@ -3,6 +3,9 @@ import ical from "node-ical";
 
 const router = Router();
 
+// NOTE: This is the public Google Calendar iCal feed (calendar.google.com),
+// not the FES Center website. It is intentionally NOT derived from
+// FESCENTER_BASE_URL and is unaffected by the website migration.
 const ICS_URL =
   "https://calendar.google.com/calendar/ical/fescalendar%40fescenter.org/public/basic.ics";
 const CACHE_TTL_MS = 5 * 60 * 1000;
