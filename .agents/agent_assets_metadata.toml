@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "Xtj0g0G92MiXUewG_3v-K"
+uri = "file://artifacts/fes-app/assets/images/icon.png"
+type = "image"
+title = "fes app icon"

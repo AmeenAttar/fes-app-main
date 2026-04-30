@@ -1,0 +1,258 @@
+import { Feather } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import * as Haptics from "expo-haptics";
+import { router } from "expo-router";
+import { useQuery } from "@tanstack/react-query";
+import React, { useState, useMemo } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Platform,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+
+import { useColors } from "@/hooks/useColors";
+import { fetchInvestigators, type InvestigatorSummary } from "@/lib/api";
+
+export default function InvestigatorsScreen() {
+  const colors = useColors();
+  const [query, setQuery] = useState("");
+
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    isRefetching,
+  } = useQuery({
+    queryKey: ["investigators"],
+    queryFn: fetchInvestigators,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const filtered = useMemo(() => {
+    if (!data) return [] as InvestigatorSummary[];
+    const q = query.trim().toLowerCase();
+    if (!q) return data;
+    return data.filter((p) => p.name.toLowerCase().includes(q));
+  }, [data, query]);
+
+  const onPressItem = (item: InvestigatorSummary) => {
+    if (Platform.OS !== "web") {
+      Haptics.selectionAsync().catch(() => {
+        /* noop */
+      });
+    }
+    router.push(`/investigators/${item.slug}` as never);
+  };
+
+  if (isLoading) {
+    return (
+      <View
+        style={[
+          styles.center,
+          { backgroundColor: colors.background },
+        ]}
+      >
+        <ActivityIndicator color={colors.primary} />
+        <Text style={[styles.dim, { color: colors.mutedForeground }]}>
+          Loading investigators…
+        </Text>
+      </View>
+    );
+  }
+
+  if (isError) {
+    return (
+      <View
+        style={[
+          styles.center,
+          { backgroundColor: colors.background, paddingHorizontal: 32 },
+        ]}
+      >
+        <Feather name="wifi-off" size={28} color={colors.mutedForeground} />
+        <Text style={[styles.errTitle, { color: colors.foreground }]}>
+          Couldn’t load investigators
+        </Text>
+        <Text style={[styles.dim, { color: colors.mutedForeground, textAlign: "center" }]}>
+          {error instanceof Error ? error.message : "Please try again."}
+        </Text>
+        <Pressable
+          onPress={() => refetch()}
+          style={[
+            styles.retryBtn,
+            { backgroundColor: colors.primary, borderRadius: colors.radius },
+          ]}
+        >
+          <Text style={[styles.retryText, { color: colors.primaryForeground }]}>
+            Retry
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <View
+        style={[
+          styles.searchWrap,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+            borderRadius: colors.radius,
+          },
+        ]}
+      >
+        <Feather name="search" size={16} color={colors.mutedForeground} />
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search investigators"
+          placeholderTextColor={colors.mutedForeground}
+          style={[styles.searchInput, { color: colors.foreground }]}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+        />
+        {query.length > 0 ? (
+          <Pressable onPress={() => setQuery("")} hitSlop={8}>
+            <Feather name="x" size={16} color={colors.mutedForeground} />
+          </Pressable>
+        ) : null}
+      </View>
+
+      <FlatList
+        data={filtered}
+        keyExtractor={(item) => item.slug}
+        contentContainerStyle={styles.listContent}
+        ItemSeparatorComponent={() => (
+          <View style={[styles.separator, { backgroundColor: colors.border }]} />
+        )}
+        ListEmptyComponent={
+          <View style={styles.center}>
+            <Feather name="users" size={28} color={colors.mutedForeground} />
+            <Text style={[styles.dim, { color: colors.mutedForeground }]}>
+              No matches.
+            </Text>
+          </View>
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={refetch}
+            tintColor={colors.primary}
+          />
+        }
+        renderItem={({ item }) => (
+          <Pressable
+            onPress={() => onPressItem(item)}
+            android_ripple={{ color: colors.muted }}
+            style={({ pressed }) => [
+              styles.row,
+              pressed ? { backgroundColor: colors.muted } : null,
+            ]}
+            testID={`investigator-${item.slug}`}
+          >
+            <View
+              style={[
+                styles.avatar,
+                { backgroundColor: colors.muted, borderRadius: 28 },
+              ]}
+            >
+              {item.photoUrl ? (
+                <Image
+                  source={{ uri: item.photoUrl }}
+                  style={styles.avatarImg}
+                  contentFit="cover"
+                  transition={120}
+                />
+              ) : (
+                <Feather name="user" size={22} color={colors.mutedForeground} />
+              )}
+            </View>
+            <View style={styles.rowText}>
+              <Text
+                style={[styles.name, { color: colors.foreground }]}
+                numberOfLines={2}
+              >
+                {item.name}
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          </Pressable>
+        )}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    padding: 24,
+  },
+  dim: { fontFamily: "Inter_400Regular", fontSize: 14 },
+  errTitle: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 18,
+    marginTop: 4,
+  },
+  retryBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    marginTop: 8,
+  },
+  retryText: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  searchWrap: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: "Inter_400Regular",
+    fontSize: 15,
+    padding: 0,
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 32,
+    flexGrow: 1,
+  },
+  separator: { height: StyleSheet.hairlineWidth },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    gap: 14,
+  },
+  avatar: {
+    width: 56,
+    height: 56,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarImg: { width: "100%", height: "100%" },
+  rowText: { flex: 1 },
+  name: { fontFamily: "Inter_600SemiBold", fontSize: 15 },
+});

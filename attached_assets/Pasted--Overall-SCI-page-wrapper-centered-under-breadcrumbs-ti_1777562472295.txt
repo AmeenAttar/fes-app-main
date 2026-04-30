@@ -1,0 +1,179 @@
+/* Overall SCI page wrapper: centered under breadcrumbs/title */
+.sci-page {
+  max-width: 1200px;
+  margin: 0 auto 60px;
+  padding: 0 20px;
+  --fes-blue: #0069a6;
+  --fes-teal: #00b2a9;
+  --text: #1f2937;
+  --muted: #4b5563;
+  font-family: Calibri, "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  color: var(--text);
+}
+
+/* HERO LAYOUT */
+.sci-hero {
+  margin-bottom: 32px;
+}
+
+.sci-hero .hero-layout {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+}
+
+/* Make text column narrower so it visually matches image height */
+.sci-hero .hero-text {
+  max-width: 600px;
+  flex: 0 0 600px;
+}
+
+.sci-hero .hero-image {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 900px) {
+  .sci-hero .hero-layout {
+    flex-direction: column;
+  }
+
+  .sci-hero .hero-text,
+  .sci-hero .hero-image {
+    max-width: 100%;
+    flex: 1 1 auto;
+    justify-content: flex-start;
+  }
+}
+
+/* Sub-headline under page title (H2) */
+.sci-hero-title {
+  font-family: "Filson Soft", sans-serif;
+  font-size: clamp(28px, 3vw, 34px);
+  font-weight: 700;
+  color: var(--fes-blue);
+  margin: 0 0 18px;
+  line-height: 1.25;
+}
+
+/* ONLY the first intro paragraph: larger lead */
+.sci-page .sci-hero p.sci-intro-lead {
+  font-size: 24px;
+  line-height: 1.7;
+  margin: 0 0 24px;
+}
+
+/* All other body copy (including SCI Programs text) */
+.sci-page p {
+  font-size: 18px;
+  line-height: 1.6;
+  color: var(--text);
+  margin: 0 0 18px;
+}
+
+/* Section heading */
+.sci-section-heading {
+  font-family: "Filson Soft", sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--fes-blue);
+  margin: 0 0 18px;
+}
+
+/* PROGRAM GRID: 3 equal columns, smaller cards, more space between */
+.sci-programs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 48px;
+  row-gap: 40px;
+  margin-bottom: 20px;
+}
+
+/* Responsive columns */
+@media (max-width: 900px) {
+  .sci-programs-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .sci-programs-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Program cards: smaller, 6:12-ish ratio, rounded corners, teal overlay */
+.sci-program-card {
+  position: relative;
+  aspect-ratio: 12 / 6;
+  max-height: 150px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* Background image behaviour */
+.sci-program-card .card-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+/* Teal overlay using #00b2a9 with some transparency */
+.sci-program-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: #00b2a9;
+  opacity: 0.55;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Inner content above overlay, MORE padding all around */
+.sci-program-card .card-content {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  width: 100%;
+  padding: 28px 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+/* Card headings */
+.sci-program-card h4 {
+  font-family: "Filson Soft", sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #ffffff;
+  margin: 0;
+}
+
+/* Keep linked titles white (all states, including hover) */
+.sci-program-card h4 a,
+.sci-program-card h4 a:visited,
+.sci-program-card h4 a:hover,
+.sci-program-card h4 a:focus,
+.sci-program-card h4 a:active {
+  color: #ffffff !important;
+  text-decoration: none !important;
+}
+
+/* Smooth image zoom on hover */
+.sci-program-card .card-image {
+  transform: scale(1);
+  transition: transform 260ms ease;
+  will-change: transform;
+}
+
+.sci-program-card:hover .card-image {
+  transform: scale(1.06);
+}

@@ -1,0 +1,158 @@
+#1 - Project Documentation & URL Migration Config
+
+What & Why
+
+Two tightly related pieces of housekeeping that need to happen together:
+
+Handoff documentation — Write a comprehensive AGENT.md at the project root so that any future developer or AI agent can pick this project up from scratch and understand exactly what has been built, what each file does, what environment variables are required, and what is planned next. This is portable — lives in the repo, not in Replit.
+URL migration readiness — The FES Center website is currently hosted at fescenter.org/test/* (staging). When the real site launches, all paths drop /test/. Right now three places in the app/api hardcode this base URL. Centralise it into a single FESCENTER_BASE_URL environment variable on the api-server (default: https://fescenter.org/test) so the migration is a one-line config change with zero code edits.
+Done looks like
+
+AGENT.md exists at the repo root and covers: project purpose, tech stack, monorepo structure, all environment variables (name, description, where set, required/optional), all current screens and what each does, API routes, push notifications system, known limitations, future planned features, and migration notes
+Every place that currently references fescenter.org/test in api-server routes uses the FESCENTER_BASE_URL env var instead
+replit.md is updated to reflect recent architectural changes (news proxy route, AddEvent, inventory sheets, FESCENTER_BASE_URL)
+A short "URL Migration Checklist" section in AGENT.md explains exactly what to change when migration happens (update FESCENTER_BASE_URL env var value — that's it)
+Out of scope
+
+Actually performing the URL migration (that happens when the website team is ready)
+Changing any UI or functionality
+Steps
+
+Centralise FESCENTER_BASE_URL — In the api-server, read process.env.FESCENTER_BASE_URL ?? "https://fescenter.org/test" into a shared config/constants file. Replace all hardcoded fescenter.org/test strings in routes with that constant.
+Audit all hardcoded URLs — Search api-server and fes-app source for any other hardcoded fescenter.org references and replace with the config constant or a clear comment.
+Write AGENT.md — At the repository root, write a thorough markdown handoff document. Sections: Overview, Tech Stack, Monorepo Structure, Running Locally, Environment Variables table, Screen-by-Screen Guide, API Routes, Push Notifications, Branding/Theme, Planned Features, URL Migration Checklist, Known Issues & Limitations.
+Update replit.md — Sync the existing replit.md to reflect all features built so far (news, events, investigators, inventory, notifications, push tokens DB, menu design) and the new env vars.
+Relevant files
+
+artifacts/api-server/src/routes/index.ts
+artifacts/api-server/src/lib/notifications.ts
+artifacts/fes-app/constants/menu.ts
+replit.md
+
+
+#2 - News Feed Screen
+
+What & Why
+
+Replace the current "News" menu tile (which opens an external browser link) with a native in-app news feed. Posts are fetched from the existing WordPress site at fescenter.org/test/news/ using the WordPress REST API. Staff check news frequently, so it must load fast and feel native — paginated fetch with infinite scroll balances smoothness against network load.
+
+Done looks like
+
+Tapping "News" on the menu opens a native screen (not a browser)
+Shows 10 most recent posts first, each as a card: hero image, title, short excerpt, date, category badge
+Scrolling to the bottom of the list automatically fetches the next 10 posts (infinite scroll / load-more)
+A loading skeleton or spinner shows while fetching; a retry button appears on network error
+Tapping a news card opens the full article — either in a native in-app WebView or via Linking.openURL to the post's full URL
+The news tile in menu.ts is updated from kind: "external" to kind: "internal" with route /news
+URL is built from a configurable env/config constant (fescenter.org/test base today, easy to switch when site migrates)
+Out of scope
+
+Offline caching / persistent local storage of articles
+Push notifications for new articles
+In-app full article rendering (WebView link-out is acceptable for now)
+Comments or social features
+Steps
+
+Config constant — Add a FESCENTER_BASE_URL constant (e.g. in constants/api.ts) set to "https://fescenter.org/test". All fetch calls in this task use that constant so migration to fescenter.org later is a one-line change.
+API route in api-server — Add a /api/news proxy route that fetches from ${FESCENTER_BASE_URL}/wp-json/wp/v2/posts with query params per_page, page, _embed (for featured image), _fields=id,title,excerpt,date,link,_embedded. Proxy the paginated response and total-pages header back to the client. Proxying through the API server avoids CORS issues from the Expo client.
+News screen — Create app/news.tsx. Use @tanstack/react-query with useInfiniteQuery keyed on page number. Render a FlatList with onEndReached triggering the next page fetch. Each card shows: featured image (from _embedded["wp:featuredmedia"][0].source_url), title, stripped excerpt (strip HTML tags and shortcodes), date formatted as "Feb 26, 2026", and category chips.
+Skeleton & error states — Show 3 placeholder skeleton cards while the first page loads. On error show a "Could not load news — tap to retry" inline message. On end of list show "You're all caught up" footer.
+Menu wiring — In constants/menu.ts change the news block from kind: "external" to kind: "internal" with route: "/news". Ensure _layout.tsx has a <Stack.Screen name="news"> entry.
+Relevant files
+
+artifacts/fes-app/constants/menu.ts
+artifacts/fes-app/app/_layout.tsx
+artifacts/fes-app/app/menu.tsx
+artifacts/api-server/src/routes/index.ts
+artifacts/api-server/src/routes/investigators.ts
+Dependencies
+Project docs & URL migration config
+
+
+
+#4 - Equipment Inventory via Google Sheets
+
+What & Why
+
+The FES Center plans to maintain an equipment inventory in a Google Sheet (or Excel file shared via Google Sheets). The Inventory screen in the app should dynamically fetch and display that sheet's data without requiring a backend database. This lets non-technical staff update the inventory just by editing the spreadsheet — no app release needed.
+
+Done looks like
+
+The Equipment Inventory screen fetches live data from a configured Google Sheet
+The first row of the sheet is treated as column headers; subsequent rows are inventory items
+Items are displayed as clean cards or a scrollable table — layout adapts to whatever columns exist in the sheet (flexible, not hardcoded to specific column names)
+A search/filter bar at the top lets investigators filter items by keyword across all fields
+Pull-to-refresh reloads from the sheet; a loading state and error state are shown appropriately
+The Sheet ID and Sheet name are configurable via environment variable, not hardcoded — so the sheet can be renamed or replaced without a code change
+If the sheet contains an "Image" column with image URLs, those images are shown in the card; if not, a placeholder icon is shown (graceful degradation)
+Out of scope
+
+Editing inventory items from the app (sheet is read-only from the app's perspective)
+Authentication / private sheets (the sheet must be "Anyone with the link can view")
+Offline support / caching beyond React Query's default cache TTL
+Category filtering UI (can be added later once column structure is decided)
+Notes
+
+Use the Google Sheets API v4 endpoint: https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{SHEET_NAME}?valueRenderOption=FORMATTED_VALUE&key={API_KEY}
+The Google Sheets API key must be a server-side secret GOOGLE_SHEETS_API_KEY in the api-server — never exposed to the Expo client. The api-server proxies the request.
+INVENTORY_SHEET_ID and INVENTORY_SHEET_NAME (defaults to Sheet1) should be environment variables on the api-server.
+The sheet must be shared as "Anyone on the internet with this link — Viewer" for the API key to work without OAuth.
+When the inventory is first set up, the team should decide columns. Recommended starter columns: Name, Category, Location, Serial Number, Status, Notes, Image (URL). The app handles any column set dynamically.
+Steps
+
+API proxy route — Add a /api/inventory route in the api-server. It reads GOOGLE_SHEETS_API_KEY, INVENTORY_SHEET_ID, INVENTORY_SHEET_NAME from env, fetches the sheet values, parses row 0 as headers and rows 1+ as data objects, and returns { headers: string[], items: Record<string, string>[] }.
+Inventory screen — Replace the stub app/equipment-inventory.tsx. Use @tanstack/react-query to fetch /api/inventory. Render a FlatList of item cards. Each card is built dynamically from the headers returned by the API — no hardcoded field names.
+Search filter — Add a TextInput search bar above the list. Filter items client-side (from the cached query data) by matching the search term against all field values. This avoids extra API calls for filtering.
+Image handling — If an "Image" header exists in the sheet and a row has a non-empty value for it, render it as a thumbnail in the card using expo-image. Otherwise show a package/box icon placeholder.
+Empty & error states — "No inventory items found" when the sheet is empty or search yields nothing. "Could not load inventory" with retry button on fetch error. Log a clear server-side warning if env vars are missing.
+Environment documentation — Add GOOGLE_SHEETS_API_KEY, INVENTORY_SHEET_ID, INVENTORY_SHEET_NAME to the project documentation.
+Relevant files
+
+artifacts/fes-app/app/equipment-inventory.tsx
+artifacts/api-server/src/routes/index.ts
+artifacts/api-server/src/routes/health.ts
+Dependencies
+Project docs & URL migration config
+
+
+#3 - Events Screen with AddEvent
+
+What & Why
+
+Build the Events screen so it displays FES Center events in a clean native list and lets investigators RSVP or add events to their personal calendar. Management already uses AddEvent to manage events. The screen should pull from their existing AddEvent calendar and surface the RSVP / "Add to Calendar" flow natively. The existing events screen stub gets replaced with real data.
+
+Done looks like
+
+The Events screen shows a list of upcoming FES Center events fetched from AddEvent (title, date/time, location, short description)
+Past events are hidden or visually de-emphasized; upcoming events shown soonest first
+Tapping an event opens an event detail view with full description and an "Add to Calendar / RSVP" button
+The RSVP / Add to Calendar button opens the AddEvent hosted page (or in-app WebView) so the investigator can register and add to their phone calendar
+An empty state is shown when no upcoming events exist
+Pull-to-refresh updates the event list
+A configurable base URL constant is used (no hardcoded /test paths) — ready for URL migration
+Out of scope
+
+Building a custom RSVP form inside the app (AddEvent handles RSVP collection)
+Creating or editing events from the app (admin-only, done on AddEvent dashboard)
+Push notification scheduling for events (already exists in api-server notifications.ts — leave as-is)
+Notes
+
+The FES Center's existing Google Calendar (fescalendar@fescenter.org) is what AddEvent currently works alongside. The AddEvent REST API v2 (https://api.addevent.com/calevent/v2/events) can list events. If the team has not yet created an AddEvent API key, the screen should gracefully fall back to rendering the Google Calendar public iCal feed (already used by the push notifications scheduler).
+AddEvent API key should be stored as a secret environment variable ADDEVENT_API_KEY, not hardcoded. The api-server proxy route reads the key server-side so it is never exposed to the mobile client.
+If AddEvent API is not yet set up, implement with the existing iCal/Google Calendar feed as a fallback and leave a clear TODO comment for the AddEvent swap.
+Steps
+
+API proxy route — Add a /api/events route in the api-server that fetches events from AddEvent REST API v2 (GET /calevent/v2/events) using the ADDEVENT_API_KEY env var. If the key is absent, fall back to fetching and parsing the public Google Calendar iCal feed already used by the notifications scheduler. Return a normalized event list (id, title, start, end, location, description, addEventUrl).
+Events screen — Replace the stub app/events/index.tsx with a real screen. Use @tanstack/react-query for data fetching with pull-to-refresh. Render events in a FlatList sorted by start date ascending, filtered to upcoming only. Each row shows: date badge (day + month), title, time range, location.
+Event detail view — Create app/events/[id].tsx. Shows full event details and an "RSVP / Add to Calendar" button that opens the AddEvent event URL in the in-app browser (expo-web-browser) or Linking.openURL.
+Empty & error states — Show "No upcoming events" with a calendar illustration when the list is empty. Show retry on fetch error.
+Environment variable — Document ADDEVENT_API_KEY in the project's env documentation. The api-server should log a warning (not crash) if the key is missing and use the iCal fallback.
+Relevant files
+
+artifacts/fes-app/app/events/index.tsx
+artifacts/fes-app/constants/events.ts
+artifacts/api-server/src/routes/index.ts
+artifacts/api-server/src/lib/notifications.ts
+artifacts/api-server/src/routes/health.ts
+Dependencies
+Project docs & URL migration config
