@@ -286,6 +286,7 @@ export default function NewsArticleScreen() {
       ) : null}
 
       <WebView
+        key={`article-body-${colors.scheme}`}
         style={[styles.web, styles.webBelowMeta, { backgroundColor: colors.background }]}
         originWhitelist={["*"]}
         source={{ html: shellHtml, baseUrl: FESCENTER_SITE_ORIGIN }}

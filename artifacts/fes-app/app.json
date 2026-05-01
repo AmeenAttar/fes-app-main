@@ -17,7 +17,8 @@
       "supportsTablet": false,
       "bundleIdentifier": "org.fescenter.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "LSApplicationQueriesSchemes": ["mailto"]
       }
     },
     "android": {

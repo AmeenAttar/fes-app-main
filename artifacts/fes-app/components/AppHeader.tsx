@@ -4,8 +4,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { HamburgerButton } from "@/components/HamburgerMenu";
-
-const FES_BLUE = "#0069a6";
+import { useColors } from "@/hooks/useColors";
 
 /**
  * Minimal shape we need from the react-navigation Stack header props. Avoids a
@@ -29,6 +28,7 @@ interface AppHeaderProps {
  */
 export function AppHeader({ options, back, navigation }: AppHeaderProps) {
   const insets = useSafeAreaInsets();
+  const colors = useColors();
   const isWeb = Platform.OS === "web";
   const title =
     typeof options.headerTitle === "string"
@@ -39,7 +39,11 @@ export function AppHeader({ options, back, navigation }: AppHeaderProps) {
     <View
       style={[
         styles.root,
-        { paddingTop: (isWeb ? 36 : insets.top) + 8 },
+        {
+          paddingTop: (isWeb ? 36 : insets.top) + 8,
+          backgroundColor: colors.background,
+          borderBottomColor: colors.border,
+        },
       ]}
     >
       <View style={styles.row}>
@@ -54,12 +58,12 @@ export function AppHeader({ options, back, navigation }: AppHeaderProps) {
                 pressed && { opacity: 0.55 },
               ]}
             >
-              <Feather name="chevron-left" size={28} color={FES_BLUE} />
+              <Feather name="chevron-left" size={28} color={colors.primary} />
             </Pressable>
           ) : null}
         </View>
 
-        <Text style={styles.title} numberOfLines={1}>
+        <Text style={[styles.title, { color: colors.primary }]} numberOfLines={1}>
           {title}
         </Text>
 
@@ -73,8 +77,6 @@ export function AppHeader({ options, back, navigation }: AppHeaderProps) {
 
 const styles = StyleSheet.create({
   root: {
-    backgroundColor: "#FFFFFF",
-    borderBottomColor: "rgba(0,0,0,0.08)",
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   row: {
@@ -102,7 +104,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: "Inter_700Bold",
     fontSize: 22,
-    color: FES_BLUE,
     textAlign: "left",
   },
 });

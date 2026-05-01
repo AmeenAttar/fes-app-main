@@ -5,12 +5,16 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { fetchWeather, type WeatherResponse } from "@/lib/api";
 
+/** Menu-drawer only: frosted card on brand blue — not tied to app light/dark theme. */
 const FES_TEAL = "#00b2a9";
-const WHITE = "#FFFFFF";
-const WHITE_70 = "rgba(255,255,255,0.70)";
-const WHITE_55 = "rgba(255,255,255,0.55)";
-const WHITE_15 = "rgba(255,255,255,0.15)";
 const CARD_BG = "rgba(255,255,255,0.08)";
+const TEXT = "#FFFFFF";
+const TEXT_MUTED = "rgba(255,255,255,0.55)";
+const TEXT_MUTED70 = "rgba(255,255,255,0.70)";
+const BORDER = "rgba(255,255,255,0.15)";
+const CELL_BG = "rgba(255,255,255,0.06)";
+const CELL_BORDER = "rgba(255,255,255,0.14)";
+const SKEL = "rgba(255,255,255,0.15)";
 
 const CARDINALS = [
   "N",
@@ -38,8 +42,6 @@ function degreesToCardinal(deg: number): string {
 
 function formatClock(iso: string): string {
   if (!iso) return "";
-  // Open-Meteo returns ISO without timezone (interpreted as local server tz);
-  // for display we just want H:MM AM/PM.
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleTimeString(undefined, {
@@ -48,7 +50,6 @@ function formatClock(iso: string): string {
   });
 }
 
-/** Calendar date-only string YYYY-MM-DD → short label e.g. "May 3". */
 function shortCalendarDate(dateOnly: string): string {
   const d = new Date(`${dateOnly}T12:00:00`);
   if (Number.isNaN(d.getTime())) return "";
@@ -68,15 +69,21 @@ export function WeatherWidget() {
   }
 
   if (isError || !data) {
-    return (
-      <View style={[styles.card, styles.errorCard]}>
-        <Feather name="cloud-off" size={18} color={WHITE_55} />
-        <Text style={styles.errorText}>Weather unavailable</Text>
-      </View>
-    );
+    return <WeatherError />;
   }
 
   return <WeatherCard data={data} />;
+}
+
+function WeatherError() {
+  return (
+    <View style={[styles.card, styles.errorCard, { backgroundColor: CARD_BG }]}>
+      <Feather name="cloud-off" size={18} color={TEXT_MUTED} />
+      <Text style={[styles.errorText, { color: TEXT_MUTED }]}>
+        Weather unavailable
+      </Text>
+    </View>
+  );
 }
 
 interface WeatherCardProps {
@@ -98,11 +105,15 @@ function WeatherCard({ data }: WeatherCardProps) {
   );
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, { backgroundColor: CARD_BG }]}>
       <View style={styles.header}>
-        <Text style={styles.locationText}>{data.location.name}</Text>
+        <Text style={[styles.locationText, { color: TEXT }]}>
+          {data.location.name}
+        </Text>
         {observedClock ? (
-          <Text style={styles.observedText}>Updated {observedClock}</Text>
+          <Text style={[styles.observedText, { color: TEXT_MUTED }]}>
+            Updated {observedClock}
+          </Text>
         ) : null}
       </View>
 
@@ -113,17 +124,21 @@ function WeatherCard({ data }: WeatherCardProps) {
             size={48}
             color={FES_TEAL}
           />
-          <Text style={styles.tempText}>{data.current.tempF}°</Text>
+          <Text style={[styles.tempText, { color: TEXT }]}>
+            {data.current.tempF}°
+          </Text>
         </View>
-        <View style={styles.heroRight}>
-          <Text style={styles.conditionText}>{data.current.condition}</Text>
-          <Text style={styles.hiloText}>
+        <View style={[styles.heroRight, { borderLeftColor: BORDER }]}>
+          <Text style={[styles.conditionText, { color: TEXT }]}>
+            {data.current.condition}
+          </Text>
+          <Text style={[styles.hiloText, { color: TEXT_MUTED70 }]}>
             Today · H {data.today.highF}° · L {data.today.lowF}°
           </Text>
         </View>
       </View>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: BORDER }]} />
 
       <View style={styles.metricsGrid}>
         <Metric label="Feels Like" value={`${data.current.feelsLikeF}°`} />
@@ -137,12 +152,18 @@ function WeatherCard({ data }: WeatherCardProps) {
 
       {data.upcoming.length > 0 ? (
         <>
-          <View style={styles.divider} />
-          <Text style={styles.upcomingSectionTitle}>Next two days</Text>
+          <View style={[styles.divider, { backgroundColor: BORDER }]} />
+          <Text style={[styles.upcomingSectionTitle, { color: TEXT_MUTED }]}>
+            Next two days
+          </Text>
           <View style={styles.upcomingRow}>
             {data.upcoming.map((day, idx) => (
               <React.Fragment key={day.date}>
-                {idx > 0 ? <View style={styles.upcomingVRule} /> : null}
+                {idx > 0 ? (
+                  <View
+                    style={[styles.upcomingVRule, { backgroundColor: BORDER }]}
+                  />
+                ) : null}
                 <UpcomingCell
                   label={idx === 0 ? "Tomorrow" : day.weekday}
                   subLabel={shortCalendarDate(day.date)}
@@ -167,8 +188,8 @@ interface MetricProps {
 function Metric({ label, value }: MetricProps) {
   return (
     <View style={styles.metricCell}>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={styles.metricValue}>{value}</Text>
+      <Text style={[styles.metricLabel, { color: TEXT_MUTED }]}>{label}</Text>
+      <Text style={[styles.metricValue, { color: TEXT }]}>{value}</Text>
     </View>
   );
 }
@@ -189,14 +210,21 @@ function UpcomingCell({
   lowF,
 }: UpcomingCellProps) {
   return (
-    <View style={styles.upcomingCell}>
-      <Text style={styles.upcomingLabel}>{label}</Text>
+    <View
+      style={[
+        styles.upcomingCell,
+        { backgroundColor: CELL_BG, borderColor: CELL_BORDER },
+      ]}
+    >
+      <Text style={[styles.upcomingLabel, { color: TEXT }]}>{label}</Text>
       {subLabel ? (
-        <Text style={styles.upcomingSubLabel}>{subLabel}</Text>
+        <Text style={[styles.upcomingSubLabel, { color: TEXT_MUTED }]}>
+          {subLabel}
+        </Text>
       ) : null}
       <View style={styles.upcomingValueRow}>
         <Feather name={iconName as never} size={20} color={FES_TEAL} />
-        <Text style={styles.upcomingTemp}>
+        <Text style={[styles.upcomingTemp, { color: TEXT }]}>
           {highF}° / {lowF}°
         </Text>
       </View>
@@ -205,25 +233,28 @@ function UpcomingCell({
 }
 
 function WeatherSkeleton() {
+  const line = [styles.skelLine, { backgroundColor: SKEL }];
   return (
-    <View style={[styles.card, styles.skeletonCard]}>
-      <View style={[styles.skelLine, { width: "40%", height: 12 }]} />
+    <View style={[styles.card, styles.skeletonCard, { backgroundColor: CARD_BG }]}>
+      <View style={[...line, { width: "40%", height: 12 }]} />
       <View style={styles.heroRow}>
         <View style={styles.heroLeft}>
-          <View style={styles.skelIcon} />
-          <View style={[styles.skelLine, { width: 68, height: 40 }]} />
+          <View style={[styles.skelIcon, { backgroundColor: SKEL }]} />
+          <View style={[...line, { width: 68, height: 40 }]} />
         </View>
-        <View style={styles.heroRight}>
-          <View style={[styles.skelLine, { width: "100%", height: 13 }]} />
-          <View style={[styles.skelLine, { width: "85%", height: 11, marginTop: 6 }]} />
+        <View style={[styles.heroRight, { borderLeftColor: BORDER }]}>
+          <View style={[...line, { width: "100%", height: 13 }]} />
+          <View
+            style={[...line, { width: "85%", height: 11, marginTop: 6 }]}
+          />
         </View>
       </View>
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: BORDER }]} />
       <View style={styles.metricsGrid}>
-        <View style={[styles.skelLine, { width: "45%", height: 13 }]} />
-        <View style={[styles.skelLine, { width: "45%", height: 13 }]} />
-        <View style={[styles.skelLine, { width: "45%", height: 13, marginTop: 6 }]} />
-        <View style={[styles.skelLine, { width: "45%", height: 13, marginTop: 6 }]} />
+        <View style={[...line, { width: "45%", height: 13 }]} />
+        <View style={[...line, { width: "45%", height: 13 }]} />
+        <View style={[...line, { width: "45%", height: 13, marginTop: 6 }]} />
+        <View style={[...line, { width: "45%", height: 13, marginTop: 6 }]} />
       </View>
     </View>
   );
@@ -231,7 +262,6 @@ function WeatherSkeleton() {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: CARD_BG,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -247,7 +277,6 @@ const styles = StyleSheet.create({
   errorText: {
     fontFamily: "Inter_500Medium",
     fontSize: 13,
-    color: WHITE_55,
   },
   skeletonCard: {
     gap: 8,
@@ -260,7 +289,6 @@ const styles = StyleSheet.create({
   locationText: {
     fontFamily: "Inter_700Bold",
     fontSize: 12,
-    color: WHITE,
     letterSpacing: 1,
     textTransform: "uppercase",
   },
@@ -268,7 +296,6 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     fontSize: 10,
     lineHeight: 13,
-    color: WHITE_55,
   },
   heroRow: {
     flexDirection: "row",
@@ -290,7 +317,6 @@ const styles = StyleSheet.create({
     paddingRight: 2,
     gap: 4,
     borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: WHITE_15,
     paddingLeft: 10,
     marginLeft: 2,
   },
@@ -298,13 +324,11 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     fontSize: 38,
     lineHeight: 42,
-    color: WHITE,
   },
   conditionText: {
     fontFamily: "Inter_600SemiBold",
     fontSize: 13,
     lineHeight: 17,
-    color: WHITE,
     textAlign: "right",
     width: "100%",
   },
@@ -312,13 +336,11 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
     fontSize: 11,
     lineHeight: 15,
-    color: WHITE_70,
     textAlign: "right",
     width: "100%",
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: WHITE_15,
   },
   metricsGrid: {
     flexDirection: "row",
@@ -335,21 +357,18 @@ const styles = StyleSheet.create({
   metricLabel: {
     fontFamily: "Inter_500Medium",
     fontSize: 11,
-    color: WHITE_55,
     letterSpacing: 0.5,
     textTransform: "uppercase",
   },
   metricValue: {
     fontFamily: "Inter_600SemiBold",
     fontSize: 12,
-    color: WHITE,
   },
   upcomingSectionTitle: {
     fontFamily: "Inter_700Bold",
     fontSize: 9,
     letterSpacing: 1.1,
     textTransform: "uppercase",
-    color: WHITE_55,
     marginBottom: -3,
   },
   upcomingRow: {
@@ -359,16 +378,13 @@ const styles = StyleSheet.create({
   upcomingVRule: {
     width: StyleSheet.hairlineWidth,
     alignSelf: "stretch",
-    backgroundColor: WHITE_15,
     marginHorizontal: 3,
     minHeight: 66,
   },
   upcomingCell: {
     flex: 1,
-    backgroundColor: "rgba(255,255,255,0.06)",
     borderRadius: 9,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.14)",
     paddingVertical: 8,
     paddingHorizontal: 8,
     alignItems: "center",
@@ -377,14 +393,12 @@ const styles = StyleSheet.create({
   upcomingLabel: {
     fontFamily: "Inter_700Bold",
     fontSize: 11,
-    color: WHITE,
     letterSpacing: 0.7,
     textTransform: "uppercase",
   },
   upcomingSubLabel: {
     fontFamily: "Inter_500Medium",
     fontSize: 10,
-    color: WHITE_55,
     marginTop: -1,
     marginBottom: 1,
   },
@@ -398,16 +412,13 @@ const styles = StyleSheet.create({
   upcomingTemp: {
     fontFamily: "Inter_600SemiBold",
     fontSize: 13,
-    color: WHITE,
   },
   skelLine: {
-    backgroundColor: WHITE_15,
     borderRadius: 4,
   },
   skelIcon: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: WHITE_15,
   },
 });

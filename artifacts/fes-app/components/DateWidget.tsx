@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-const FES_BLUE = "#0069a6";
+import { useColors } from "@/hooks/useColors";
 
 function formatWeekday(d: Date): string {
   return new Intl.DateTimeFormat(undefined, { weekday: "short" })
@@ -28,10 +28,9 @@ function formatAccessibilityLabel(d: Date): string {
  * mirroring the hamburger button. Non-interactive — purely informational.
  */
 export function DateWidget() {
+  const colors = useColors();
   const [now, setNow] = useState(() => new Date());
 
-  // Keep the date current if the app stays open across midnight. Polling once
-  // per minute is trivial and the comparison is cheap.
   useEffect(() => {
     const id = setInterval(() => {
       const next = new Date();
@@ -48,14 +47,23 @@ export function DateWidget() {
 
   return (
     <View
-      style={styles.box}
+      style={[
+        styles.box,
+        { backgroundColor: `${colors.primary}12` },
+      ]}
       accessibilityRole="text"
       accessibilityLabel={formatAccessibilityLabel(now)}
     >
-      <Text style={styles.weekday} numberOfLines={1}>
+      <Text
+        style={[styles.weekday, { color: colors.primary }]}
+        numberOfLines={1}
+      >
         {formatWeekday(now)}
       </Text>
-      <Text style={styles.dayMonth} numberOfLines={1}>
+      <Text
+        style={[styles.dayMonth, { color: colors.primary }]}
+        numberOfLines={1}
+      >
         {formatDayMonth(now)}
       </Text>
     </View>
@@ -67,7 +75,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: "rgba(0,105,166,0.07)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -75,14 +82,12 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     fontSize: 9,
     letterSpacing: 1,
-    color: FES_BLUE,
-    opacity: 0.7,
+    opacity: 0.75,
     lineHeight: 11,
   },
   dayMonth: {
     fontFamily: "Inter_700Bold",
     fontSize: 13,
-    color: FES_BLUE,
     lineHeight: 16,
     marginTop: 1,
   },

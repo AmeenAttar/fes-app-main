@@ -30,6 +30,7 @@ const FES_BLUE_LIGHT = "#0081c8";
 
 export default function MenuScreen() {
   const colors = useColors();
+  const ctaShadow = colors.primary;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
 
@@ -45,7 +46,7 @@ export default function MenuScreen() {
       try {
         await WebBrowser.openBrowserAsync(block.url, {
           presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-          toolbarColor: FES_BLUE,
+          toolbarColor: colors.primary,
           controlsColor: "#FFFFFF",
         });
       } catch {
@@ -109,6 +110,7 @@ export default function MenuScreen() {
         android_ripple={{ color: "rgba(255,255,255,0.18)" }}
         style={({ pressed }) => [
           styles.ctaBar,
+          { shadowColor: ctaShadow },
           pressed ? styles.tilePressed : null,
         ]}
         testID="menu-cta-bar"
@@ -137,12 +139,14 @@ interface MenuTileProps {
 }
 
 function MenuTile({ block, onPress }: MenuTileProps) {
+  const colors = useColors();
   return (
     <Pressable
       onPress={onPress}
       android_ripple={{ color: "rgba(255,255,255,0.18)" }}
       style={({ pressed }) => [
         styles.tile,
+        { shadowColor: colors.primary },
         pressed ? styles.tilePressed : null,
       ]}
       testID={`menu-tile-${block.id}`}
@@ -209,11 +213,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 12,
     // iOS shadow
-    shadowColor: FES_BLUE,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.18,
     shadowRadius: 12,
-    // Android elevation
     elevation: 6,
   },
   tileHighlight: {
@@ -255,7 +257,6 @@ const styles = StyleSheet.create({
     gap: 14,
     overflow: "hidden",
     // iOS shadow
-    shadowColor: FES_BLUE,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
