@@ -4,6 +4,7 @@ import investigatorsRouter from "./investigators";
 import { eventsRouter } from "./events";
 import newsRouter from "./news";
 import { pushRouter } from "./push";
+import weatherRouter from "./weather";
 
 const router: IRouter = Router();
 
@@ -12,5 +13,6 @@ router.use(investigatorsRouter);
 router.use(eventsRouter);
 router.use(newsRouter);
 router.use(pushRouter);
+router.use(weatherRouter);
 
 export default router;

@@ -105,3 +105,37 @@ export async function fetchNewsPage(page: number): Promise<NewsPage> {
   }
   return (await res.json()) as NewsPage;
 }
+
+export interface WeatherUpcomingDay {
+  date: string;
+  weekday: string;
+  highF: number;
+  lowF: number;
+  condition: string;
+  iconName: string;
+}
+
+export interface WeatherResponse {
+  location: { name: string; latitude: number; longitude: number };
+  current: {
+    tempF: number;
+    feelsLikeF: number;
+    humidity: number;
+    windMph: number;
+    windDirection: number;
+    isDay: boolean;
+    condition: string;
+    iconName: string;
+    observedAt: string;
+  };
+  today: { highF: number; lowF: number; sunrise: string; sunset: string };
+  upcoming: WeatherUpcomingDay[];
+}
+
+export async function fetchWeather(): Promise<WeatherResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/weather`);
+  if (!res.ok) {
+    throw new Error(`Failed to load weather (${res.status})`);
+  }
+  return (await res.json()) as WeatherResponse;
+}
