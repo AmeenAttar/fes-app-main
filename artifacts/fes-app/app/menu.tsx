@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
   },
   logo: {
     flex: 1,
-    height: 50,
+    height: 30,
   },
   grid: {
     flex: 1,

@@ -72,8 +72,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   logoWrap: {
-    width: 280,
-    height: 120,
+    width: 168,
+    height: 72,
     alignItems: "center",
     justifyContent: "center",
   },
