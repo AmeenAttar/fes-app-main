@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { DateWidget } from "@/components/DateWidget";
 import { HamburgerButton } from "@/components/HamburgerMenu";
 import { MENU_BLOCKS, type MenuBlock } from "@/constants/menu";
 import { PROJECT_REVIEW_CONTACT } from "@/constants/supporting-resources";
@@ -80,7 +81,9 @@ export default function MenuScreen() {
       ]}
     >
       <View style={styles.header}>
-        <View style={styles.headerSide} />
+        <View style={styles.headerSide}>
+          <DateWidget />
+        </View>
         <Image source={LOGO} style={styles.logo} contentFit="contain" />
         <View style={styles.headerSide}>
           <HamburgerButton />
