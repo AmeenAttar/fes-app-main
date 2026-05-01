@@ -20,7 +20,9 @@ import {
   registerForPushNotifications,
 } from "@/lib/push";
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {
+  /* Expo Go dev client mismatches native splash APIs; dev build is unaffected. */
+});
 configureNotificationHandler();
 
 const queryClient = new QueryClient();
@@ -34,7 +36,8 @@ function RootLayoutNav() {
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="menu" options={{ headerShown: false }} />
-      <Stack.Screen name="news" options={{ title: "News" }} />
+      <Stack.Screen name="news/index" options={{ title: "News" }} />
+      <Stack.Screen name="news/[id]" options={{ title: "Article" }} />
       <Stack.Screen
         name="investigators/index"
         options={{ title: "Investigators" }}
@@ -44,6 +47,10 @@ function RootLayoutNav() {
         options={{ title: "" }}
       />
       <Stack.Screen name="events/index" options={{ title: "Events" }} />
+      <Stack.Screen
+        name="events/[id]"
+        options={{ title: "Event" }}
+      />
       <Stack.Screen
         name="supporting-resources"
         options={{ title: "Supporting Resources" }}
@@ -67,7 +74,9 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
+      SplashScreen.hideAsync().catch(() => {
+        /* noop: prevents "No native splash screen registered" in Expo Go */
+      });
     }
   }, [fontsLoaded, fontError]);
 

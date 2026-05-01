@@ -1,7 +1,11 @@
 import { Router, type IRouter } from "express";
 
-import { WP_API_BASE_URL } from "../lib/config";
-import { stripWordPressContent } from "../lib/html";
+import { FESCENTER_HOSTNAME, WP_API_BASE_URL } from "../lib/config";
+import {
+  stripDangerousMarkup,
+  stripShortcodes,
+  stripWordPressContent,
+} from "../lib/html";
 
 const router: IRouter = Router();
 
@@ -52,6 +56,7 @@ interface WpPost {
   link: string;
   title: WpRendered;
   excerpt: WpRendered;
+  content?: WpRendered;
   _embedded?: {
     "wp:featuredmedia"?: WpFeaturedMedia[];
     "wp:term"?: WpEmbeddedTerm[][];
@@ -64,6 +69,39 @@ interface CacheEntry {
 }
 
 const pageCache = new Map<string, CacheEntry>();
+
+export interface NewsArticleResponse {
+  id: number;
+  title: string;
+  excerpt: string;
+  /** Sanitized snippet of post body for optional native preview elsewhere. */
+  contentHtml: string;
+  date: string;
+  canonicalLink: string;
+  featuredImageUrl: string | null;
+  categories: string[];
+}
+
+interface DetailCacheEntry {
+  data: NewsArticleResponse;
+  fetchedAt: number;
+}
+
+const detailCache = new Map<number, DetailCacheEntry>();
+
+function toArticleResponse(post: WpPost): NewsArticleResponse {
+  const rawHtml = stripShortcodes(post.content?.rendered ?? "");
+  return {
+    id: post.id,
+    title: stripWordPressContent(post.title?.rendered ?? ""),
+    excerpt: stripWordPressContent(post.excerpt?.rendered ?? ""),
+    contentHtml: stripDangerousMarkup(rawHtml),
+    date: post.date,
+    canonicalLink: post.link,
+    featuredImageUrl: pickFeaturedImage(post._embedded?.["wp:featuredmedia"]),
+    categories: pickCategoryNames(post._embedded?.["wp:term"]),
+  };
+}
 
 function clampPerPage(raw: unknown): number {
   const n = Number(raw);
@@ -118,6 +156,7 @@ router.get("/news", async (req, res) => {
 
   const cached = pageCache.get(cacheKey);
   if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+    res.setHeader("Cache-Control", "private, no-store");
     res.json(cached.data);
     return;
   }
@@ -145,6 +184,7 @@ router.get("/news", async (req, res) => {
         total: 0,
       };
       pageCache.set(cacheKey, { data: body, fetchedAt: Date.now() });
+      res.setHeader("Cache-Control", "private, no-store");
       res.json(body);
       return;
     }
@@ -167,11 +207,62 @@ router.get("/news", async (req, res) => {
     };
 
     pageCache.set(cacheKey, { data: body, fetchedAt: Date.now() });
+    res.setHeader("Cache-Control", "private, no-store");
     res.json(body);
   } catch (err) {
     req.log.error({ err, url: url.toString() }, "Failed to fetch news");
     res.status(502).json({
-      error: "Unable to load news from fescenter.org",
+      error: `Unable to load news from ${FESCENTER_HOSTNAME}`,
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+router.get("/news/:postId", async (req, res) => {
+  const rawId = req.params["postId"];
+  if (!rawId || !/^\d+$/.test(rawId)) {
+    res.status(404).json({ error: "news_not_found" });
+    return;
+  }
+  const postId = Number(rawId);
+
+  const cached = detailCache.get(postId);
+  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json({ article: cached.data });
+    return;
+  }
+
+  const url = new URL(`${WP_API_BASE_URL}/posts/${postId}`);
+  url.searchParams.set("_embed", "true");
+  url.searchParams.set(
+    "_fields",
+    "id,date,link,title,excerpt,content,_links,_embedded",
+  );
+
+  try {
+    const upstream = await fetch(url.toString(), { headers: REQUEST_HEADERS });
+
+    if (upstream.status === 404) {
+      res.status(404).json({ error: "news_not_found" });
+      return;
+    }
+
+    if (!upstream.ok) {
+      throw new Error(
+        `Upstream WP REST returned ${upstream.status} ${upstream.statusText}`,
+      );
+    }
+
+    const post = (await upstream.json()) as WpPost;
+    const article = toArticleResponse(post);
+    detailCache.set(postId, { data: article, fetchedAt: Date.now() });
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json({ article });
+  } catch (err) {
+    req.log.error({ err, url: url.toString() }, "Failed to fetch news detail");
+    res.status(502).json({
+      error: `Unable to load article from ${FESCENTER_HOSTNAME}`,
       message: err instanceof Error ? err.message : String(err),
     });
   }

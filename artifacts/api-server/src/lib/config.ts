@@ -16,10 +16,46 @@ const DEFAULT_FESCENTER_BASE_URL = "https://fescenter.org/test";
 function readBaseUrl(): string {
   const raw = process.env["FESCENTER_BASE_URL"]?.trim();
   if (!raw) return DEFAULT_FESCENTER_BASE_URL;
-  return raw.replace(/\/+$/, "");
+  let t = raw.replace(/\/+$/u, "");
+  if (!/^https?:\/\//iu.test(t)) t = `https://${t}`;
+  return t;
 }
 
 export const FESCENTER_BASE_URL = readBaseUrl();
+
+/**
+ * Parsed hostname from {@link FESCENTER_BASE_URL} — used for scrape heuristics
+ * and stable error/copy strings tied to whichever site tier is configured.
+ */
+export const FESCENTER_HOSTNAME = (() => {
+  try {
+    const withScheme = /^https?:\/\//i.test(FESCENTER_BASE_URL)
+      ? FESCENTER_BASE_URL
+      : `https://${FESCENTER_BASE_URL}`;
+    return new URL(withScheme.replace(/\/+$/u, "")).hostname;
+  } catch {
+    return "fescenter.org";
+  }
+})();
+
+function escapeRegexHostname(hostname: string): string {
+  return hostname.replace(/\./g, "\\.");
+}
+
+/** First hero-style `<img>` whose `src` is https on this hostname (typically WP uploads). */
+export function fescenterSiteHeroImgRegex(): RegExp {
+  const h = escapeRegexHostname(FESCENTER_HOSTNAME);
+  return new RegExp(
+    `<img[^>]+src="(https://${h}/[^"]+\\.(?:jpg|jpeg|png|webp))"`,
+    "gi",
+  );
+}
+
+/** Matches info@ inbox on this hostname (drops footer/contact boilerplate in bios). */
+export function fescenterInfoEmailRegex(): RegExp {
+  const h = escapeRegexHostname(FESCENTER_HOSTNAME);
+  return new RegExp(`info@${h}`, "i");
+}
 
 export const INVESTIGATORS_LIST_URL = `${FESCENTER_BASE_URL}/team/investigators/`;
 

@@ -1,13 +1,12 @@
 import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
-import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
-import React, { useEffect, useState } from "react";
+import { router } from "expo-router";
+import React from "react";
 import {
   ActivityIndicator,
   FlatList,
   Linking,
-  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -16,41 +15,23 @@ import {
 } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
-import { fetchEvents, type CalendarEvent } from "@/lib/api";
-import { loadAllRsvps, setRsvp, type RsvpStatus } from "@/lib/rsvp";
+import {
+  calendarEventsListQueryKey,
+  fetchEvents,
+  type CalendarEvent,
+} from "@/lib/api";
 
 const CALENDAR_HTML_URL =
   "https://calendar.google.com/calendar/u/0?cid=ZmVzY2FsZW5kYXJAZmVzY2VudGVyLm9yZw";
 
 export default function EventsScreen() {
   const colors = useColors();
-  const [rsvps, setRsvps] = useState<Record<string, RsvpStatus>>({});
-
-  useEffect(() => {
-    loadAllRsvps().then((s) => setRsvps(s));
-  }, []);
 
   const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
-    queryKey: ["events"],
+    queryKey: calendarEventsListQueryKey,
     queryFn: fetchEvents,
     staleTime: 5 * 60 * 1000,
   });
-
-  const onSetRsvp = async (eventId: string, status: RsvpStatus) => {
-    if (Platform.OS !== "web") {
-      Haptics.selectionAsync().catch(() => {
-        /* noop */
-      });
-    }
-    const newStatus = rsvps[eventId] === status ? null : status;
-    setRsvps((prev) => {
-      const next = { ...prev };
-      if (newStatus === null) delete next[eventId];
-      else next[eventId] = newStatus;
-      return next;
-    });
-    await setRsvp(eventId, newStatus);
-  };
 
   const openCalendar = async () => {
     try {
@@ -121,23 +102,28 @@ export default function EventsScreen() {
         />
       }
       ListHeaderComponent={
-        <Pressable
-          onPress={openCalendar}
-          style={({ pressed }) => [
-            styles.calendarBtn,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-              borderRadius: colors.radius,
-              opacity: pressed ? 0.7 : 1,
-            },
-          ]}
-        >
-          <Feather name="calendar" size={18} color={colors.primary} />
-          <Text style={[styles.calendarBtnText, { color: colors.primary }]}>
-            Open in Google Calendar
+        <View style={styles.headerBlock}>
+          <Pressable
+            onPress={openCalendar}
+            style={({ pressed }) => [
+              styles.calendarBtn,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                borderRadius: colors.radius,
+                opacity: pressed ? 0.7 : 1,
+              },
+            ]}
+          >
+            <Feather name="calendar" size={18} color={colors.primary} />
+            <Text style={[styles.calendarBtnText, { color: colors.primary }]}>
+              Open in Google Calendar
+            </Text>
+          </Pressable>
+          <Text style={[styles.subhead, { color: colors.mutedForeground }]}>
+            Tap an event for full details, RSVP, or add to calendar.
           </Text>
-        </Pressable>
+        </View>
       }
       ListEmptyComponent={
         <View style={styles.empty}>
@@ -148,23 +134,26 @@ export default function EventsScreen() {
         </View>
       }
       renderItem={({ item }) => (
-        <EventCard
+        <EventRow
           event={item}
-          status={rsvps[item.id] ?? null}
-          onSetStatus={(s) => onSetRsvp(item.id, s)}
+          onPress={() =>
+            router.push({
+              pathname: "/events/[id]",
+              params: { id: item.id },
+            })
+          }
         />
       )}
     />
   );
 }
 
-interface EventCardProps {
+interface EventRowProps {
   event: CalendarEvent;
-  status: RsvpStatus;
-  onSetStatus: (s: RsvpStatus) => void;
+  onPress: () => void;
 }
 
-function EventCard({ event, status, onSetStatus }: EventCardProps) {
+function EventRow({ event, onPress }: EventRowProps) {
   const colors = useColors();
   const start = new Date(event.start);
 
@@ -185,101 +174,60 @@ function EventCard({ event, status, onSetStatus }: EventCardProps) {
       })}`;
 
   return (
-    <View
-      style={[
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${event.title}. ${dateLine}`}
+      style={({ pressed }) => [
         styles.card,
         {
           backgroundColor: colors.card,
           borderColor: colors.border,
           borderRadius: colors.radius,
+          opacity: pressed ? 0.92 : 1,
         },
       ]}
     >
-      <Text style={[styles.eventDate, { color: colors.secondary }]}>
-        {dateLine}
-      </Text>
-      <Text style={[styles.eventTitle, { color: colors.foreground }]}>
-        {event.title}
-      </Text>
-      {event.location ? (
-        <View style={styles.metaRow}>
-          <Feather name="map-pin" size={13} color={colors.mutedForeground} />
-          <Text style={[styles.metaText, { color: colors.mutedForeground }]}>
-            {event.location}
+      <View style={styles.cardInner}>
+        <View style={styles.cardText}>
+          <View style={styles.dateRow}>
+            <Text style={[styles.eventDate, { color: colors.secondary }]}>
+              {dateLine}
+            </Text>
+            {event.addEventUrl ||
+            event.actionLinks?.some((l) => l.kind === "rsvp") ? (
+              <View style={[styles.rsvpTag, { borderColor: colors.secondary }]}>
+                <Text style={[styles.rsvpTagText, { color: colors.secondary }]}>
+                  RSVP
+                </Text>
+              </View>
+            ) : null}
+          </View>
+          <Text style={[styles.eventTitle, { color: colors.foreground }]}>
+            {event.title}
           </Text>
+          {event.location ? (
+            <View style={styles.metaRow}>
+              <Feather name="map-pin" size={13} color={colors.mutedForeground} />
+              <Text
+                style={[styles.metaText, { color: colors.mutedForeground }]}
+                numberOfLines={1}
+              >
+                {event.location}
+              </Text>
+            </View>
+          ) : null}
+          {event.description ? (
+            <Text
+              style={[styles.eventDesc, { color: colors.mutedForeground }]}
+              numberOfLines={2}
+            >
+              {event.description}
+            </Text>
+          ) : null}
         </View>
-      ) : null}
-      {event.description ? (
-        <Text
-          style={[styles.eventDesc, { color: colors.mutedForeground }]}
-          numberOfLines={3}
-        >
-          {event.description}
-        </Text>
-      ) : null}
-
-      <View style={styles.rsvpRow}>
-        <RsvpBtn
-          label="Going"
-          icon="check"
-          active={status === "going"}
-          activeColor={colors.secondary}
-          onPress={() => onSetStatus("going")}
-        />
-        <RsvpBtn
-          label="Interested"
-          icon="star"
-          active={status === "interested"}
-          activeColor={colors.primary}
-          onPress={() => onSetStatus("interested")}
-        />
-        <RsvpBtn
-          label="Not Going"
-          icon="x"
-          active={status === "not-going"}
-          activeColor={colors.mutedForeground}
-          onPress={() => onSetStatus("not-going")}
-        />
+        <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
       </View>
-    </View>
-  );
-}
-
-interface RsvpBtnProps {
-  label: string;
-  icon: React.ComponentProps<typeof Feather>["name"];
-  active: boolean;
-  activeColor: string;
-  onPress: () => void;
-}
-
-function RsvpBtn({ label, icon, active, activeColor, onPress }: RsvpBtnProps) {
-  const colors = useColors();
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.rsvpBtn,
-        {
-          backgroundColor: active ? activeColor : colors.background,
-          borderColor: active ? activeColor : colors.border,
-          opacity: pressed ? 0.7 : 1,
-        },
-      ]}
-    >
-      <Feather
-        name={icon}
-        size={13}
-        color={active ? "#FFFFFF" : colors.foreground}
-      />
-      <Text
-        style={[
-          styles.rsvpBtnText,
-          { color: active ? "#FFFFFF" : colors.foreground },
-        ]}
-      >
-        {label}
-      </Text>
     </Pressable>
   );
 }
@@ -312,6 +260,17 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     gap: 12,
   },
+  headerBlock: {
+    gap: 8,
+    marginBottom: 4,
+  },
+  subhead: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    lineHeight: 18,
+    paddingHorizontal: 2,
+    marginBottom: 4,
+  },
   calendarBtn: {
     borderWidth: 1,
     paddingVertical: 12,
@@ -320,7 +279,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    marginBottom: 4,
   },
   calendarBtnText: {
     fontFamily: "Inter_600SemiBold",
@@ -334,8 +292,36 @@ const styles = StyleSheet.create({
   },
   card: {
     borderWidth: 1,
-    padding: 14,
-    gap: 6,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+  },
+  cardInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  cardText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  dateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  rsvpTag: {
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+  },
+  rsvpTagText: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 9,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
   },
   eventDate: {
     fontFamily: "Inter_700Bold",
@@ -356,6 +342,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   metaText: {
+    flex: 1,
     fontFamily: "Inter_400Regular",
     fontSize: 13,
   },
@@ -363,26 +350,6 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     fontSize: 13,
     lineHeight: 18,
-    marginTop: 4,
-  },
-  rsvpRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 12,
-  },
-  rsvpBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  rsvpBtnText: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 12,
+    marginTop: 2,
   },
 });

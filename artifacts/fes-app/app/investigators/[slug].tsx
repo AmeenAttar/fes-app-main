@@ -14,6 +14,7 @@ import {
 } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
+import { FESCENTER_SITE_HOSTNAME } from "@/lib/site";
 import { fetchInvestigatorDetail } from "@/lib/api";
 
 export default function InvestigatorDetailScreen() {
@@ -156,7 +157,7 @@ export default function InvestigatorDetailScreen() {
       >
         <Feather name="external-link" size={16} color={colors.primary} />
         <Text style={[styles.linkBtnText, { color: colors.primary }]}>
-          View on fescenter.org
+          {`View on ${FESCENTER_SITE_HOSTNAME}`}
         </Text>
       </Pressable>
     </ScrollView>

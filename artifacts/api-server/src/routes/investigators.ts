@@ -1,10 +1,16 @@
 import { Router, type IRouter } from "express";
-import { INVESTIGATORS_LIST_URL } from "../lib/config";
+import {
+  FESCENTER_HOSTNAME,
+  INVESTIGATORS_LIST_URL,
+  fescenterInfoEmailRegex,
+  fescenterSiteHeroImgRegex,
+} from "../lib/config";
 import { decodeHtmlEntities, stripTags } from "../lib/html";
 
 const router: IRouter = Router();
 
 const SOURCE_URL = INVESTIGATORS_LIST_URL;
+const INFO_EMAIL_REGEX = fescenterInfoEmailRegex();
 const BROWSER_HEADERS: Record<string, string> = {
   "User-Agent":
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
@@ -83,8 +89,9 @@ function parseInvestigatorDetail(
         .trim()
     : base.name;
 
-  // Hero image: first uploaded image that isn't a logo, favicon, or icon
-  const imgRegex = /<img[^>]+src="(https:\/\/fescenter\.org\/[^"]+\.(?:jpg|jpeg|png|webp))"/gi;
+  // Hero image: first uploaded image that isn't a logo, favicon, or icon (fresh `/g`
+  // matcher per HTML — global regex state must not persist across parses).
+  const imgRegex = fescenterSiteHeroImgRegex();
   let heroImageUrl: string | null = null;
   let imgMatch: RegExpExecArray | null;
   while ((imgMatch = imgRegex.exec(html)) !== null) {
@@ -103,7 +110,7 @@ function parseInvestigatorDetail(
     const text = stripTags(pMatch[1]);
     if (text.length < 30) continue;
     if (/Cleveland FES Center Operations/i.test(text)) continue;
-    if (/info@fescenter\.org/i.test(text)) continue;
+    if (INFO_EMAIL_REGEX.test(text)) continue;
     if (/^Copyright/i.test(text)) continue;
     if (/All Rights Reserved/i.test(text)) continue;
     if (bio.includes(text)) continue;
@@ -153,7 +160,7 @@ router.get("/investigators", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to fetch investigators");
     res.status(502).json({
-      error: "Unable to load investigators from fescenter.org",
+      error: `Unable to load investigators from ${FESCENTER_HOSTNAME}`,
       message: err instanceof Error ? err.message : String(err),
     });
   }
@@ -191,7 +198,7 @@ router.get("/investigators/:slug", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to fetch investigator detail");
     res.status(502).json({
-      error: "Unable to load investigator detail from fescenter.org",
+      error: `Unable to load investigator detail from ${FESCENTER_HOSTNAME}`,
       message: err instanceof Error ? err.message : String(err),
     });
   }

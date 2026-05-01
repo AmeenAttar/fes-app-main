@@ -48,6 +48,13 @@ function formatClock(iso: string): string {
   });
 }
 
+/** Calendar date-only string YYYY-MM-DD → short label e.g. "May 3". */
+function shortCalendarDate(dateOnly: string): string {
+  const d = new Date(`${dateOnly}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 export function WeatherWidget() {
   const { data, isLoading, isError } = useQuery<WeatherResponse, Error>({
     queryKey: ["weather"],
@@ -100,17 +107,18 @@ function WeatherCard({ data }: WeatherCardProps) {
       </View>
 
       <View style={styles.heroRow}>
-        <Feather
-          name={data.current.iconName as never}
-          size={56}
-          color={FES_TEAL}
-          style={styles.heroIcon}
-        />
-        <View style={styles.heroText}>
+        <View style={styles.heroLeft}>
+          <Feather
+            name={data.current.iconName as never}
+            size={48}
+            color={FES_TEAL}
+          />
           <Text style={styles.tempText}>{data.current.tempF}°</Text>
+        </View>
+        <View style={styles.heroRight}>
           <Text style={styles.conditionText}>{data.current.condition}</Text>
           <Text style={styles.hiloText}>
-            H {data.today.highF}°  ·  L {data.today.lowF}°
+            Today · H {data.today.highF}° · L {data.today.lowF}°
           </Text>
         </View>
       </View>
@@ -130,15 +138,19 @@ function WeatherCard({ data }: WeatherCardProps) {
       {data.upcoming.length > 0 ? (
         <>
           <View style={styles.divider} />
+          <Text style={styles.upcomingSectionTitle}>Next two days</Text>
           <View style={styles.upcomingRow}>
             {data.upcoming.map((day, idx) => (
-              <UpcomingCell
-                key={day.date}
-                label={idx === 0 ? "TOMORROW" : day.weekday}
-                iconName={day.iconName}
-                highF={day.highF}
-                lowF={day.lowF}
-              />
+              <React.Fragment key={day.date}>
+                {idx > 0 ? <View style={styles.upcomingVRule} /> : null}
+                <UpcomingCell
+                  label={idx === 0 ? "Tomorrow" : day.weekday}
+                  subLabel={shortCalendarDate(day.date)}
+                  iconName={day.iconName}
+                  highF={day.highF}
+                  lowF={day.lowF}
+                />
+              </React.Fragment>
             ))}
           </View>
         </>
@@ -163,19 +175,29 @@ function Metric({ label, value }: MetricProps) {
 
 interface UpcomingCellProps {
   label: string;
+  subLabel: string;
   iconName: string;
   highF: number;
   lowF: number;
 }
 
-function UpcomingCell({ label, iconName, highF, lowF }: UpcomingCellProps) {
+function UpcomingCell({
+  label,
+  subLabel,
+  iconName,
+  highF,
+  lowF,
+}: UpcomingCellProps) {
   return (
     <View style={styles.upcomingCell}>
       <Text style={styles.upcomingLabel}>{label}</Text>
+      {subLabel ? (
+        <Text style={styles.upcomingSubLabel}>{subLabel}</Text>
+      ) : null}
       <View style={styles.upcomingValueRow}>
-        <Feather name={iconName as never} size={18} color={WHITE} />
+        <Feather name={iconName as never} size={20} color={FES_TEAL} />
         <Text style={styles.upcomingTemp}>
-          {highF}°/{lowF}°
+          {highF}° / {lowF}°
         </Text>
       </View>
     </View>
@@ -187,19 +209,21 @@ function WeatherSkeleton() {
     <View style={[styles.card, styles.skeletonCard]}>
       <View style={[styles.skelLine, { width: "40%", height: 12 }]} />
       <View style={styles.heroRow}>
-        <View style={styles.skelIcon} />
-        <View style={styles.heroText}>
-          <View style={[styles.skelLine, { width: 80, height: 36 }]} />
-          <View style={[styles.skelLine, { width: 120, height: 14, marginTop: 6 }]} />
-          <View style={[styles.skelLine, { width: 100, height: 12, marginTop: 6 }]} />
+        <View style={styles.heroLeft}>
+          <View style={styles.skelIcon} />
+          <View style={[styles.skelLine, { width: 68, height: 40 }]} />
+        </View>
+        <View style={styles.heroRight}>
+          <View style={[styles.skelLine, { width: "100%", height: 13 }]} />
+          <View style={[styles.skelLine, { width: "85%", height: 11, marginTop: 6 }]} />
         </View>
       </View>
       <View style={styles.divider} />
       <View style={styles.metricsGrid}>
-        <View style={[styles.skelLine, { width: "45%", height: 14 }]} />
-        <View style={[styles.skelLine, { width: "45%", height: 14 }]} />
-        <View style={[styles.skelLine, { width: "45%", height: 14, marginTop: 8 }]} />
-        <View style={[styles.skelLine, { width: "45%", height: 14, marginTop: 8 }]} />
+        <View style={[styles.skelLine, { width: "45%", height: 13 }]} />
+        <View style={[styles.skelLine, { width: "45%", height: 13 }]} />
+        <View style={[styles.skelLine, { width: "45%", height: 13, marginTop: 6 }]} />
+        <View style={[styles.skelLine, { width: "45%", height: 13, marginTop: 6 }]} />
       </View>
     </View>
   );
@@ -208,10 +232,10 @@ function WeatherSkeleton() {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: CARD_BG,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 10,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 8,
   },
   errorCard: {
     flexDirection: "row",
@@ -226,7 +250,7 @@ const styles = StyleSheet.create({
     color: WHITE_55,
   },
   skeletonCard: {
-    gap: 10,
+    gap: 8,
   },
   header: {
     flexDirection: "row",
@@ -242,38 +266,55 @@ const styles = StyleSheet.create({
   },
   observedText: {
     fontFamily: "Inter_400Regular",
-    fontSize: 11,
+    fontSize: 10,
+    lineHeight: 13,
     color: WHITE_55,
   },
   heroRow: {
     flexDirection: "row",
+    alignItems: "stretch",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  heroLeft: {
+    flexDirection: "row",
     alignItems: "center",
-    gap: 14,
+    gap: 8,
+    flexShrink: 0,
   },
-  heroIcon: {
-    width: 56,
-    textAlign: "center",
-  },
-  heroText: {
+  heroRight: {
     flex: 1,
+    minWidth: 0,
+    justifyContent: "center",
+    alignItems: "flex-end",
+    paddingRight: 2,
+    gap: 4,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: WHITE_15,
+    paddingLeft: 10,
+    marginLeft: 2,
   },
   tempText: {
     fontFamily: "Inter_700Bold",
-    fontSize: 44,
-    lineHeight: 48,
+    fontSize: 38,
+    lineHeight: 42,
     color: WHITE,
   },
   conditionText: {
     fontFamily: "Inter_600SemiBold",
-    fontSize: 14,
+    fontSize: 13,
+    lineHeight: 17,
     color: WHITE,
-    marginTop: 2,
+    textAlign: "right",
+    width: "100%",
   },
   hiloText: {
     fontFamily: "Inter_500Medium",
-    fontSize: 12,
+    fontSize: 11,
+    lineHeight: 15,
     color: WHITE_70,
-    marginTop: 4,
+    textAlign: "right",
+    width: "100%",
   },
   divider: {
     height: StyleSheet.hairlineWidth,
@@ -282,8 +323,8 @@ const styles = StyleSheet.create({
   metricsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    rowGap: 8,
-    columnGap: 12,
+    rowGap: 6,
+    columnGap: 10,
   },
   metricCell: {
     width: "47%",
@@ -300,31 +341,59 @@ const styles = StyleSheet.create({
   },
   metricValue: {
     fontFamily: "Inter_600SemiBold",
-    fontSize: 13,
+    fontSize: 12,
     color: WHITE,
+  },
+  upcomingSectionTitle: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 9,
+    letterSpacing: 1.1,
+    textTransform: "uppercase",
+    color: WHITE_55,
+    marginBottom: -3,
   },
   upcomingRow: {
     flexDirection: "row",
-    gap: 12,
+    alignItems: "stretch",
+  },
+  upcomingVRule: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: "stretch",
+    backgroundColor: WHITE_15,
+    marginHorizontal: 3,
+    minHeight: 66,
   },
   upcomingCell: {
     flex: 1,
-    flexDirection: "row",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 9,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.14)",
+    paddingVertical: 8,
+    paddingHorizontal: 8,
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
+    gap: 3,
   },
   upcomingLabel: {
     fontFamily: "Inter_700Bold",
     fontSize: 11,
-    color: WHITE_70,
-    letterSpacing: 0.5,
+    color: WHITE,
+    letterSpacing: 0.7,
     textTransform: "uppercase",
+  },
+  upcomingSubLabel: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 10,
+    color: WHITE_55,
+    marginTop: -1,
+    marginBottom: 1,
   },
   upcomingValueRow: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 6,
+    marginTop: 1,
   },
   upcomingTemp: {
     fontFamily: "Inter_600SemiBold",
@@ -336,9 +405,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   skelIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: WHITE_15,
   },
 });

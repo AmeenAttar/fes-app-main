@@ -68,7 +68,16 @@ function getDeploymentDomain() {
   }
 
   console.error(
-    "ERROR: No deployment domain found. Set REPLIT_INTERNAL_APP_DOMAIN, REPLIT_DEV_DOMAIN, or EXPO_PUBLIC_DOMAIN",
+    [
+      "ERROR: No deployment domain found for this static export script.",
+      "Set one of: REPLIT_INTERNAL_APP_DOMAIN, REPLIT_DEV_DOMAIN, or EXPO_PUBLIC_DOMAIN",
+      "(e.g. EXPO_PUBLIC_DOMAIN=http://localhost:8080 for local API).",
+      "",
+      "If you meant to start the API server instead:",
+      "  cd artifacts/api-server && pnpm run build && PORT=8080 pnpm run start",
+      "If you meant local Expo dev (Metro), not this build:",
+      "  cd artifacts/fes-app && pnpm run start:local",
+    ].join("\n"),
   );
   process.exit(1);
 }

@@ -137,27 +137,25 @@ function NavMenuModal({ open, onClose }: NavMenuModalProps) {
               <Feather name="chevron-right" size={18} color="rgba(255,255,255,0.55)" />
             </Pressable>
 
-            <View style={styles.list}>
-              {MENU_BLOCKS.map((block) => (
-                <Pressable
-                  key={block.id}
-                  onPress={() => onPress(block)}
-                  android_ripple={{ color: "rgba(255,255,255,0.18)" }}
-                  style={({ pressed }) => [
-                    styles.row,
-                    pressed && { backgroundColor: "rgba(255,255,255,0.10)" },
-                  ]}
-                >
-                  <Feather name={block.icon} size={22} color="#FFFFFF" />
-                  <Text style={styles.rowLabel}>{block.label}</Text>
-                  <Feather
-                    name={block.kind === "external" ? "external-link" : "chevron-right"}
-                    size={18}
-                    color="rgba(255,255,255,0.55)"
-                  />
-                </Pressable>
-              ))}
-            </View>
+            {MENU_BLOCKS.map((block) => (
+              <Pressable
+                key={block.id}
+                onPress={() => onPress(block)}
+                android_ripple={{ color: "rgba(255,255,255,0.18)" }}
+                style={({ pressed }) => [
+                  styles.row,
+                  pressed && { backgroundColor: "rgba(255,255,255,0.10)" },
+                ]}
+              >
+                <Feather name={block.icon} size={22} color="#FFFFFF" />
+                <Text style={styles.rowLabel}>{block.label}</Text>
+                <Feather
+                  name={block.kind === "external" ? "external-link" : "chevron-right"}
+                  size={18}
+                  color="rgba(255,255,255,0.55)"
+                />
+              </Pressable>
+            ))}
           </View>
         </ScrollView>
       </View>
@@ -184,13 +182,13 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: "space-between",
     paddingHorizontal: 20,
   },
   topGroup: {
     gap: 18,
   },
   bottomGroup: {
+    marginTop: 18,
     gap: 0,
   },
   modalHeader: {
@@ -207,14 +205,10 @@ const styles = StyleSheet.create({
   closeBtn: {
     padding: 4,
   },
-  list: {
-    marginTop: 4,
-  },
   homeRow: {
     backgroundColor: FES_TEAL,
     borderRadius: 10,
     paddingHorizontal: 16,
-    marginBottom: 12,
     borderBottomWidth: 0,
   },
   row: {

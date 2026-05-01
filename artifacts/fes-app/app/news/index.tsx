@@ -2,8 +2,8 @@ import { Feather } from "@expo/vector-icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
-import * as WebBrowser from "expo-web-browser";
-import React, { useMemo } from "react";
+import { router } from "expo-router";
+import React, { useCallback, useMemo, useRef } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -16,7 +16,12 @@ import {
 } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
-import { fetchNewsPage, type NewsItem, type NewsPage } from "@/lib/api";
+import {
+  fetchNewsPage,
+  newsInfiniteQueryKey,
+  type NewsItem,
+  type NewsPage,
+} from "@/lib/api";
 
 const SKELETON_COUNT = 3;
 
@@ -30,16 +35,20 @@ export default function NewsScreen() {
     error,
     refetch,
     isRefetching,
+    isRefetchError,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    isFetchNextPageError,
   } = useInfiniteQuery<NewsPage, Error>({
-    queryKey: ["news"],
+    queryKey: newsInfiniteQueryKey,
     queryFn: ({ pageParam }) => fetchNewsPage(pageParam as number),
     initialPageParam: 1,
     getNextPageParam: (lastPage) =>
       lastPage.page < lastPage.totalPages ? lastPage.page + 1 : undefined,
     staleTime: 5 * 60 * 1000,
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
   });
 
   const items = useMemo<NewsItem[]>(
@@ -47,25 +56,28 @@ export default function NewsScreen() {
     [data],
   );
 
-  const onEndReached = () => {
-    if (hasNextPage && !isFetchingNextPage) {
-      fetchNextPage();
-    }
-  };
+  const endReachLock = useRef(false);
 
-  const onPressItem = async (item: NewsItem) => {
+  const onEndReached = useCallback(() => {
+    if (!hasNextPage || isFetchingNextPage) return;
+    if (isFetchNextPageError) return;
+    if (endReachLock.current) return;
+    endReachLock.current = true;
+    void fetchNextPage().finally(() => {
+      endReachLock.current = false;
+    });
+  }, [
+    fetchNextPage,
+    hasNextPage,
+    isFetchNextPageError,
+    isFetchingNextPage,
+  ]);
+
+  const onPressItem = (item: NewsItem) => {
     if (Platform.OS !== "web") {
       Haptics.selectionAsync().catch(() => undefined);
     }
-    try {
-      await WebBrowser.openBrowserAsync(item.link, {
-        presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-        toolbarColor: colors.primary,
-        controlsColor: "#FFFFFF",
-      });
-    } catch {
-      /* noop */
-    }
+    router.push({ pathname: "/news/[id]", params: { id: String(item.id) } });
   };
 
   if (isLoading) {
@@ -116,17 +128,49 @@ export default function NewsScreen() {
   return (
     <FlatList
       style={{ backgroundColor: colors.background }}
-      contentContainerStyle={styles.listContent}
+      contentContainerStyle={[
+        styles.listContent,
+        items.length === 0 && !isRefetchError ? styles.listContentEmpty : null,
+      ]}
       data={items}
       keyExtractor={(item) => String(item.id)}
       onEndReached={onEndReached}
-      onEndReachedThreshold={0.4}
+      onEndReachedThreshold={0.35}
       refreshControl={
         <RefreshControl
           refreshing={isRefetching && !isFetchingNextPage}
-          onRefresh={refetch}
+          onRefresh={() => refetch()}
           tintColor={colors.primary}
         />
+      }
+      ListHeaderComponent={
+        isRefetchError && items.length > 0 ? (
+          <View
+            style={[
+              styles.refetchBanner,
+              {
+                backgroundColor: colors.muted,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Feather name="alert-circle" size={18} color={colors.secondary} />
+            <Text
+              style={[styles.refetchBannerText, { color: colors.foreground }]}
+            >
+              Couldn’t refresh. Showing saved posts.
+            </Text>
+            <Pressable
+              onPress={() => refetch()}
+              hitSlop={10}
+              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+            >
+              <Text style={[styles.refetchRetry, { color: colors.primary }]}>
+                Retry
+              </Text>
+            </Pressable>
+          </View>
+        ) : null
       }
       ListEmptyComponent={
         <View style={styles.empty}>
@@ -137,7 +181,37 @@ export default function NewsScreen() {
         </View>
       }
       ListFooterComponent={
-        isFetchingNextPage ? (
+        isFetchNextPageError ? (
+          <View
+            style={[
+              styles.loadMoreErr,
+              { borderColor: colors.border, backgroundColor: colors.card },
+            ]}
+          >
+            <Text
+              style={[styles.loadMoreErrText, { color: colors.mutedForeground }]}
+            >
+              Couldn’t load more posts.
+            </Text>
+            <Pressable
+              onPress={() => fetchNextPage()}
+              style={({ pressed }) => [
+                styles.loadMoreRetry,
+                {
+                  borderColor: colors.primary,
+                  borderRadius: colors.radius,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <Text
+                style={[styles.loadMoreRetryText, { color: colors.primary }]}
+              >
+                Try again
+              </Text>
+            </Pressable>
+          </View>
+        ) : isFetchingNextPage ? (
           <View style={styles.footer}>
             <ActivityIndicator color={colors.primary} />
           </View>
@@ -314,9 +388,56 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   listContent: {
+    flexGrow: 1,
     padding: 16,
     paddingBottom: 40,
     gap: 14,
+  },
+  listContentEmpty: {
+    justifyContent: "center",
+  },
+  refetchBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  refetchBannerText: {
+    flex: 1,
+    fontFamily: "Inter_500Medium",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  refetchRetry: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 13,
+  },
+  loadMoreErr: {
+    marginTop: 4,
+    padding: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 10,
+    alignItems: "center",
+  },
+  loadMoreErrText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 18,
+  },
+  loadMoreRetry: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderWidth: 1,
+  },
+  loadMoreRetryText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
   },
   card: {
     borderWidth: 1,

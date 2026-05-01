@@ -53,3 +53,8 @@ export function stripTags(html: string): string {
 export function stripWordPressContent(html: string): string {
   return stripTags(stripShortcodes(html));
 }
+
+/** Remove script blobs before returning HTML for in-app browsers (minimal XSS hedge). */
+export function stripDangerousMarkup(html: string): string {
+  return html.replace(/<script\b[\s\S]*?<\/script>/gi, "");
+}
