@@ -7,6 +7,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -89,71 +90,76 @@ function NavMenuModal({ open, onClose }: NavMenuModalProps) {
       presentationStyle="overFullScreen"
       transparent={false}
     >
-      <View
-        style={[
-          styles.modal,
-          {
-            paddingTop: insets.top + 14,
-            paddingBottom: insets.bottom + 24,
-          },
-        ]}
-      >
-        <View style={styles.topGroup}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>MENU</Text>
-            <Pressable
-              onPress={onClose}
-              hitSlop={12}
-              accessibilityLabel="Close menu"
-              style={({ pressed }) => [
-                styles.closeBtn,
-                pressed && { opacity: 0.55 },
-              ]}
-            >
-              <Feather name="x" size={28} color="#FFFFFF" />
-            </Pressable>
-          </View>
-
-          <WeatherWidget />
-        </View>
-
-        <View style={styles.bottomGroup}>
-          <Pressable
-            onPress={onPressHome}
-            android_ripple={{ color: "rgba(255,255,255,0.18)" }}
-            style={({ pressed }) => [
-              styles.row,
-              styles.homeRow,
-              pressed && { backgroundColor: "rgba(255,255,255,0.10)" },
-            ]}
-          >
-            <Feather name="home" size={22} color="#FFFFFF" />
-            <Text style={styles.rowLabel}>Home</Text>
-            <Feather name="chevron-right" size={18} color="rgba(255,255,255,0.55)" />
-          </Pressable>
-
-          <View style={styles.list}>
-            {MENU_BLOCKS.map((block) => (
+      <View style={styles.modalOuter}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingTop: insets.top + 14,
+              paddingBottom: insets.bottom + 24,
+            },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.topGroup}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>MENU</Text>
               <Pressable
-                key={block.id}
-                onPress={() => onPress(block)}
-                android_ripple={{ color: "rgba(255,255,255,0.18)" }}
+                onPress={onClose}
+                hitSlop={12}
+                accessibilityLabel="Close menu"
                 style={({ pressed }) => [
-                  styles.row,
-                  pressed && { backgroundColor: "rgba(255,255,255,0.10)" },
+                  styles.closeBtn,
+                  pressed && { opacity: 0.55 },
                 ]}
               >
-                <Feather name={block.icon} size={22} color="#FFFFFF" />
-                <Text style={styles.rowLabel}>{block.label}</Text>
-                <Feather
-                  name={block.kind === "external" ? "external-link" : "chevron-right"}
-                  size={18}
-                  color="rgba(255,255,255,0.55)"
-                />
+                <Feather name="x" size={28} color="#FFFFFF" />
               </Pressable>
-            ))}
+            </View>
+
+            <WeatherWidget />
           </View>
-        </View>
+
+          <View style={styles.bottomGroup}>
+            <Pressable
+              onPress={onPressHome}
+              android_ripple={{ color: "rgba(255,255,255,0.18)" }}
+              style={({ pressed }) => [
+                styles.row,
+                styles.homeRow,
+                pressed && { backgroundColor: "rgba(255,255,255,0.10)" },
+              ]}
+            >
+              <Feather name="home" size={22} color="#FFFFFF" />
+              <Text style={styles.rowLabel}>Home</Text>
+              <Feather name="chevron-right" size={18} color="rgba(255,255,255,0.55)" />
+            </Pressable>
+
+            <View style={styles.list}>
+              {MENU_BLOCKS.map((block) => (
+                <Pressable
+                  key={block.id}
+                  onPress={() => onPress(block)}
+                  android_ripple={{ color: "rgba(255,255,255,0.18)" }}
+                  style={({ pressed }) => [
+                    styles.row,
+                    pressed && { backgroundColor: "rgba(255,255,255,0.10)" },
+                  ]}
+                >
+                  <Feather name={block.icon} size={22} color="#FFFFFF" />
+                  <Text style={styles.rowLabel}>{block.label}</Text>
+                  <Feather
+                    name={block.kind === "external" ? "external-link" : "chevron-right"}
+                    size={18}
+                    color="rgba(255,255,255,0.55)"
+                  />
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </ScrollView>
       </View>
     </Modal>
   );
@@ -169,11 +175,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 2,
   },
-  modal: {
+  modalOuter: {
     flex: 1,
     backgroundColor: FES_BLUE,
-    paddingHorizontal: 20,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: "space-between",
+    paddingHorizontal: 20,
   },
   topGroup: {
     gap: 18,
