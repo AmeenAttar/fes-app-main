@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { INVESTIGATORS_LIST_URL } from "../lib/config";
+import { decodeHtmlEntities, stripTags } from "../lib/html";
 
 const router: IRouter = Router();
 
@@ -32,27 +33,6 @@ interface CacheEntry<T> {
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const listCache = new Map<string, CacheEntry<Investigator[]>>();
 const detailCache = new Map<string, CacheEntry<InvestigatorDetail>>();
-
-function decodeHtmlEntities(input: string): string {
-  return input
-    .replace(/&#8211;/g, "–")
-    .replace(/&#8212;/g, "—")
-    .replace(/&#8216;|&#8217;/g, "'")
-    .replace(/&#8220;|&#8221;/g, '"')
-    .replace(/&#038;/g, "&")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#039;|&apos;/g, "'")
-    .replace(/&nbsp;/g, " ");
-}
-
-function stripTags(html: string): string {
-  return decodeHtmlEntities(html.replace(/<[^>]+>/g, " "))
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 function extractSlug(detailUrl: string): string {
   const m = detailUrl.match(/\/([^/]+)\/?$/);

@@ -22,3 +22,5 @@ function readBaseUrl(): string {
 export const FESCENTER_BASE_URL = readBaseUrl();
 
 export const INVESTIGATORS_LIST_URL = `${FESCENTER_BASE_URL}/team/investigators/`;
+
+export const WP_API_BASE_URL = `${FESCENTER_BASE_URL}/wp-json/wp/v2`;

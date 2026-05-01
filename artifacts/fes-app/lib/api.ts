@@ -76,3 +76,32 @@ export async function fetchEvents(): Promise<CalendarEvent[]> {
   const json = (await res.json()) as EventsResponse;
   return json.events;
 }
+
+export interface NewsItem {
+  id: number;
+  title: string;
+  excerpt: string;
+  link: string;
+  date: string;
+  featuredImageUrl: string | null;
+  categories: string[];
+}
+
+export interface NewsPage {
+  items: NewsItem[];
+  page: number;
+  totalPages: number;
+  total: number;
+}
+
+export const NEWS_PAGE_SIZE = 10;
+
+export async function fetchNewsPage(page: number): Promise<NewsPage> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/news?page=${page}&perPage=${NEWS_PAGE_SIZE}`,
+  );
+  if (!res.ok) {
+    throw new Error(`Failed to load news (${res.status})`);
+  }
+  return (await res.json()) as NewsPage;
+}

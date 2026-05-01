@@ -24,8 +24,8 @@ export const MENU_BLOCKS: MenuBlock[] = [
     id: "news",
     label: "News",
     icon: "rss",
-    kind: "external",
-    url: "https://fescenter.org/blog/",
+    kind: "internal",
+    route: "/news",
   },
   {
     id: "events",
