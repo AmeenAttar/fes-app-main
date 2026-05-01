@@ -8,11 +8,6 @@
     "scheme": "fes-app",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/images/logo.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
-    },
     "notification": {
       "icon": "./assets/images/icon.png",
       "color": "#0069a6",
@@ -45,6 +40,15 @@
         {
           "icon": "./assets/images/icon.png",
           "color": "#0069a6"
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/logo.png",
+          "imageWidth": 168,
+          "resizeMode": "contain",
+          "backgroundColor": "#FFFFFF"
         }
       ]
     ],
