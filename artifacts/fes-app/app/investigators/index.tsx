@@ -154,6 +154,9 @@ export default function InvestigatorsScreen() {
           <Pressable
             onPress={() => onPressItem(item)}
             android_ripple={{ color: colors.muted }}
+            accessibilityRole="button"
+            accessibilityLabel={item.name}
+            accessibilityHint="Opens this investigator's profile"
             style={({ pressed }) => [
               styles.row,
               pressed ? { backgroundColor: colors.muted } : null,

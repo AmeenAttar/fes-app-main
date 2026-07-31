@@ -5,7 +5,10 @@ import {
   Inter_700Bold,
   useFonts,
 } from "@expo-google-fonts/inter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
+import { QueryClient } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
@@ -30,7 +33,27 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 });
 configureNotificationHandler();
 
-const queryClient = new QueryClient();
+/** Cached responses older than this are dropped rather than restored on launch. */
+const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Persisted below, so a cold start renders last-known data immediately
+      // and refetches behind it instead of showing an error on a bad connection.
+      gcTime: CACHE_MAX_AGE_MS,
+      staleTime: 5 * 60 * 1000,
+      retry: 2,
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+      refetchOnReconnect: true,
+    },
+  },
+});
+
+const persister = createAsyncStoragePersister({
+  storage: AsyncStorage,
+  key: "@fes/query-cache-v1",
+});
 
 function ThemedGestureShell({ children }: { children: React.ReactNode }) {
   const colors = useColors();
@@ -98,6 +121,7 @@ function RootLayoutNav() {
         options={{ title: "Equipment Inventory" }}
       />
       <Stack.Screen name="tuesdays" options={{ title: "Tuesdays" }} />
+      <Stack.Screen name="settings" options={{ title: "Settings" }} />
       </Stack>
     </>
   );
@@ -136,13 +160,16 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ThemeProvider>
         <ErrorBoundary>
-          <QueryClientProvider client={queryClient}>
+          <PersistQueryClientProvider
+            client={queryClient}
+            persistOptions={{ persister, maxAge: CACHE_MAX_AGE_MS }}
+          >
             <ThemedGestureShell>
               <ZoomTransitionProvider>
                 <RootLayoutNav />
               </ZoomTransitionProvider>
             </ThemedGestureShell>
-          </QueryClientProvider>
+          </PersistQueryClientProvider>
         </ErrorBoundary>
       </ThemeProvider>
     </SafeAreaProvider>

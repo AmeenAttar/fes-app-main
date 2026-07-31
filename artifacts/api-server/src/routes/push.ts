@@ -4,8 +4,13 @@ import { eq, sql } from "drizzle-orm";
 import { Expo } from "expo-server-sdk";
 
 import { db, pushTokensTable } from "@workspace/db";
+import { requireApiToken } from "../lib/security";
 
 const router = Router();
+
+// Writes to the token registry: unauthenticated, these let anyone flood the
+// push fan-out or silently unsubscribe a device they can name.
+router.use("/push-tokens", requireApiToken);
 
 const registerSchema = z.object({
   token: z.string().min(1),

@@ -252,6 +252,11 @@ function NewsCard({ item, onPress }: NewsCardProps) {
     <Pressable
       onPress={onPress}
       android_ripple={{ color: colors.muted }}
+      accessibilityRole="button"
+      accessibilityLabel={
+        dateLabel ? `${item.title}. Published ${dateLabel}` : item.title
+      }
+      accessibilityHint="Opens the full article"
       style={({ pressed }) => [
         styles.card,
         {

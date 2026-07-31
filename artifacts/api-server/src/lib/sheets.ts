@@ -49,7 +49,64 @@ function cellToString(v: unknown): string {
 
 export type SheetMatrix = string[][];
 
+/**
+ * Sheets allows 300 reads/min per project. Without a cache every screen open
+ * spent one of those, so a handful of staff refreshing could take out both the
+ * inventory and supporting-resources screens at once.
+ */
+const SHEET_CACHE_TTL_MS = 10 * 60 * 1000;
+/** How long a cached tab may still be served once the API starts failing. */
+const SHEET_STALE_MAX_MS = 24 * 60 * 60 * 1000;
+
+interface SheetCacheEntry {
+  ts: number;
+  data: SheetMatrix;
+}
+
+const sheetCache = new Map<string, SheetCacheEntry>();
+/** Collapses concurrent misses for the same tab into one upstream read. */
+const sheetInFlight = new Map<string, Promise<SheetMatrix>>();
+
+/**
+ * Cached read of one tab. Serves fresh within the TTL, collapses concurrent
+ * misses, and falls back to the last good copy when Sheets is unreachable —
+ * stale rows beat an empty screen for data that changes a few times a month.
+ */
 export async function fetchSheetFormattedValues(
+  spreadsheetId: string,
+  rangeA1: string,
+): Promise<SheetMatrix> {
+  const key = `${spreadsheetId}::${rangeA1}`;
+  const now = Date.now();
+
+  const cached = sheetCache.get(key);
+  if (cached && now - cached.ts < SHEET_CACHE_TTL_MS) return cached.data;
+
+  const pending = sheetInFlight.get(key);
+  if (pending) return pending;
+
+  const request = (async () => {
+    try {
+      const fresh = await fetchSheetUncached(spreadsheetId, rangeA1);
+      sheetCache.set(key, { ts: Date.now(), data: fresh });
+      return fresh;
+    } catch (err) {
+      const stale = sheetCache.get(key);
+      if (stale && Date.now() - stale.ts < SHEET_STALE_MAX_MS) {
+        logger.warn({ key, err }, "Sheets fetch failed; serving cached copy");
+        return stale.data;
+      }
+      throw err;
+    } finally {
+      sheetInFlight.delete(key);
+    }
+  })();
+
+  sheetInFlight.set(key, request);
+  return request;
+}
+
+async function fetchSheetUncached(
   spreadsheetId: string,
   rangeA1: string,
 ): Promise<SheetMatrix> {

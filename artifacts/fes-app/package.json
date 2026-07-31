@@ -60,6 +60,8 @@
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@tanstack/query-async-storage-persister": "^5.101.4",
+    "@tanstack/react-query-persist-client": "^5.101.4",
     "expo": "~54.0.34",
     "expo-blur": "~15.0.8",
     "expo-dev-client": "~6.0.21",

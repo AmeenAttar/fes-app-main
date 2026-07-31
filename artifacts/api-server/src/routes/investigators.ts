@@ -80,7 +80,7 @@ function removeBalancedDiv(html: string, openIdx: number): string {
  * structurally so nested markup goes with the container and the filter survives
  * copy changes in the banner.
  */
-function stripSiteChrome(html: string): string {
+export function stripSiteChrome(html: string): string {
   let out = html;
   for (const marker of CHROME_CONTAINERS) {
     // Bounded so malformed markup can never spin here.
@@ -245,6 +245,18 @@ router.get("/investigators/:slug", async (req, res) => {
 
     const html = await fetchHtml(base.detailUrl);
     const detail = parseInvestigatorDetail(html, base);
+
+    // A page that parses to no bio at all means the markup moved under us.
+    // Still served — a photo and name beat an error — but it should be visible
+    // in the logs rather than degrading silently, which is how site chrome
+    // ended up in these bios in the first place.
+    if (detail.bio.length === 0) {
+      req.log.warn(
+        { slug, url: base.detailUrl },
+        "Investigator detail parsed with an empty bio — check upstream markup",
+      );
+    }
+
     detailCache.set(slug, { data: detail, fetchedAt: Date.now() });
     res.json({ investigator: detail, cached: false });
   } catch (err) {

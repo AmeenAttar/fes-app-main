@@ -291,6 +291,22 @@ function NavMenuModal({ open, anchor, onClose }: NavMenuModalProps) {
               </Pressable>
             ))}
 
+            <Pressable
+              onPress={() => closeThen(() => router.push("/settings" as never))}
+              android_ripple={{ color: "rgba(255,255,255,0.18)" }}
+              accessibilityRole="button"
+              accessibilityLabel="Settings"
+              style={({ pressed }) => [
+                styles.row,
+                { borderBottomColor: border },
+                pressed && { backgroundColor: "rgba(255,255,255,0.08)" },
+              ]}
+            >
+              <Feather name="settings" size={22} color={fg} />
+              <Text style={[styles.rowLabel, { color: fg }]}>Settings</Text>
+              <Feather name="chevron-right" size={18} color={muted} />
+            </Pressable>
+
             <View style={[styles.themeRow, { borderTopColor: border }]}>
               <View
                 style={[

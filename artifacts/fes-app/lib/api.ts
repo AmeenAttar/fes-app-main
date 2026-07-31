@@ -12,6 +12,17 @@ function getBaseUrl(): string {
 
 export const API_BASE_URL = getBaseUrl();
 
+/**
+ * Shared secret for the API's write endpoints. Set per build profile in
+ * `eas.json`; when unset the server treats auth as not enforced, so local dev
+ * and existing deployments keep working unchanged.
+ */
+const API_TOKEN = process.env.EXPO_PUBLIC_API_TOKEN?.trim() ?? "";
+
+export function apiAuthHeaders(): Record<string, string> {
+  return API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : {};
+}
+
 export interface InvestigatorSummary {
   slug: string;
   name: string;

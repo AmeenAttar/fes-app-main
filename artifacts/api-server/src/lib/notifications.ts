@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { inArray, lt } from "drizzle-orm";
 
 import { db, pushTokensTable, sentNotificationsTable } from "@workspace/db";
 
@@ -6,9 +6,17 @@ import { loadEvents, type EventDto } from "../routes/events";
 import { NEWS_PUSH_POLL_INTERVAL_MS, processNewsPushOnce } from "./news-push";
 import { logger } from "./logger";
 import { sendToAllDevices } from "./push-delivery";
+import { eventStartMs, FES_TIMEZONE } from "./time";
 
 /** How often the scheduler re-checks the calendar. */
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Past occurrences can never fire again, so the dedupe ledger only needs enough
+ * history to cover the widest reminder window. Without this it grows forever.
+ */
+const LEDGER_RETENTION_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
+const PRUNE_EVERY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Reminder windows. We send each kind exactly once per occurrence.
@@ -50,11 +58,32 @@ function formatTimeSuffix(e: EventDto): string {
     const time = d.toLocaleTimeString("en-US", {
       hour: "numeric",
       minute: "2-digit",
-      timeZone: "America/New_York",
+      timeZone: FES_TIMEZONE,
     });
     return ` · ${time} ET`;
   } catch {
     return "";
+  }
+}
+
+function ledgerKey(uid: string, occurrenceStart: Date, kind: string): string {
+  return `${uid}|${occurrenceStart.toISOString()}|${kind}`;
+}
+
+let lastPrunedAt = 0;
+
+/** Drops ledger rows for occurrences too old to ever fire again. */
+async function pruneLedger(): Promise<void> {
+  if (Date.now() - lastPrunedAt < PRUNE_EVERY_MS) return;
+  lastPrunedAt = Date.now();
+  try {
+    await db
+      .delete(sentNotificationsTable)
+      .where(
+        lt(sentNotificationsTable.sentAt, new Date(Date.now() - LEDGER_RETENTION_MS)),
+      );
+  } catch (err) {
+    logger.warn({ err }, "Scheduler: ledger prune failed");
   }
 }
 
@@ -72,81 +101,137 @@ async function processOnce(): Promise<void> {
 
   const now = Date.now();
 
+  // Collect everything due first, so the ledger can be checked in one query
+  // instead of one per event × reminder.
+  const due: Array<{
+    event: EventDto;
+    reminder: (typeof REMINDERS)[number];
+    occurrenceStart: Date;
+  }> = [];
+
   for (const event of events) {
-    const startTs = new Date(event.start).getTime();
+    const startTs = eventStartMs(event.start, event.allDay);
     if (Number.isNaN(startTs)) continue;
     const minutesUntil = (startTs - now) / 60000;
     if (minutesUntil <= 0) continue;
 
     for (const reminder of REMINDERS) {
-      if (minutesUntil < reminder.minMinutes || minutesUntil > reminder.maxMinutes) {
+      if (
+        minutesUntil < reminder.minMinutes ||
+        minutesUntil > reminder.maxMinutes
+      ) {
         continue;
       }
-
-      // Has this reminder already been sent for this occurrence?
-      const occurrenceStart = new Date(event.start);
-      const existing = await db
-        .select({ id: sentNotificationsTable.id })
-        .from(sentNotificationsTable)
-        .where(
-          and(
-            eq(sentNotificationsTable.eventUid, event.uid),
-            eq(sentNotificationsTable.occurrenceStart, occurrenceStart),
-            eq(sentNotificationsTable.kind, reminder.kind),
-          ),
-        )
-        .limit(1);
-
-      if (existing.length > 0) continue;
-
-      const { title, body } = reminder.buildBody(event);
-
-      logger.info(
-        { kind: reminder.kind, event: event.title, minutesUntil: Math.round(minutesUntil) },
-        "Sending reminder",
-      );
-
-      await sendToAllDevices(
-        {
-          title,
-          body,
-          data: { eventUid: event.uid, occurrenceStart: occurrenceStart.toISOString() },
-        },
-        tokens,
-      );
-
-      try {
-        await db.insert(sentNotificationsTable).values({
-          eventUid: event.uid,
-          occurrenceStart,
-          kind: reminder.kind,
-        });
-      } catch {
-        // Race condition with another instance — safe to ignore due to unique index.
-      }
+      due.push({ event, reminder, occurrenceStart: new Date(event.start) });
     }
   }
+
+  if (due.length === 0) {
+    await pruneLedger();
+    return;
+  }
+
+  const uids = [...new Set(due.map((d) => d.event.uid))];
+  const alreadySent = await db
+    .select({
+      eventUid: sentNotificationsTable.eventUid,
+      occurrenceStart: sentNotificationsTable.occurrenceStart,
+      kind: sentNotificationsTable.kind,
+    })
+    .from(sentNotificationsTable)
+    .where(inArray(sentNotificationsTable.eventUid, uids));
+
+  const sentKeys = new Set(
+    alreadySent.map((r) => ledgerKey(r.eventUid, r.occurrenceStart, r.kind)),
+  );
+
+  for (const { event, reminder, occurrenceStart } of due) {
+    const key = ledgerKey(event.uid, occurrenceStart, reminder.kind);
+    if (sentKeys.has(key)) continue;
+
+    const { title, body } = reminder.buildBody(event);
+
+    logger.info(
+      { kind: reminder.kind, event: event.title },
+      "Sending reminder",
+    );
+
+    await sendToAllDevices(
+      {
+        title,
+        body,
+        data: {
+          eventUid: event.uid,
+          occurrenceStart: occurrenceStart.toISOString(),
+        },
+      },
+      tokens,
+    );
+
+    try {
+      await db.insert(sentNotificationsTable).values({
+        eventUid: event.uid,
+        occurrenceStart,
+        kind: reminder.kind,
+      });
+    } catch {
+      // Race with another instance — the unique index makes this safe to ignore.
+    }
+    sentKeys.add(key);
+  }
+
+  await pruneLedger();
 }
 
 let started = false;
+let eventsTimer: NodeJS.Timeout | null = null;
+let newsTimer: NodeJS.Timeout | null = null;
+/** Guards against a slow tick overlapping the next one. */
+let eventsRunning = false;
+let newsRunning = false;
+
+async function runEventsTick(): Promise<void> {
+  if (eventsRunning) return;
+  eventsRunning = true;
+  try {
+    await processOnce();
+  } catch (err) {
+    logger.error({ err }, "Scheduler tick failed");
+  } finally {
+    eventsRunning = false;
+  }
+}
+
+async function runNewsTick(): Promise<void> {
+  if (newsRunning) return;
+  newsRunning = true;
+  try {
+    await processNewsPushOnce();
+  } catch (err) {
+    logger.error({ err }, "News push tick failed");
+  } finally {
+    newsRunning = false;
+  }
+}
+
+/** Stops both timers so the process can exit cleanly. */
+export function stopNotificationScheduler(): void {
+  if (eventsTimer) clearInterval(eventsTimer);
+  if (newsTimer) clearInterval(newsTimer);
+  eventsTimer = null;
+  newsTimer = null;
+  started = false;
+}
 
 export function startNotificationScheduler(): void {
   if (started) return;
   started = true;
 
-  processOnce().catch((err) => logger.error({ err }, "Initial scheduler run failed"));
+  void runEventsTick();
+  eventsTimer = setInterval(() => void runEventsTick(), POLL_INTERVAL_MS);
 
-  setInterval(() => {
-    processOnce().catch((err) => logger.error({ err }, "Scheduler tick failed"));
-  }, POLL_INTERVAL_MS);
-
-  processNewsPushOnce().catch((err) =>
-    logger.error({ err }, "Initial news push run failed"),
-  );
-
-  setInterval(() => {
-    processNewsPushOnce().catch((err) => logger.error({ err }, "News push tick failed"));
-  }, NEWS_PUSH_POLL_INTERVAL_MS);
+  void runNewsTick();
+  newsTimer = setInterval(() => void runNewsTick(), NEWS_PUSH_POLL_INTERVAL_MS);
 
   logger.info(
     {

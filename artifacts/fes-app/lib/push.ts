@@ -5,9 +5,46 @@ import * as Notifications from "expo-notifications";
 import { router } from "expo-router";
 import { Platform } from "react-native";
 
-import { API_BASE_URL } from "./api";
+import { API_BASE_URL, apiAuthHeaders } from "./api";
 
 const TOKEN_STORAGE_KEY = "@fes/push-token-v1";
+/** User's own choice, independent of the OS-level permission. */
+const PUSH_ENABLED_KEY = "@fes/push-enabled-v1";
+
+/** Defaults to on — opting out is an explicit action. */
+export async function isPushEnabled(): Promise<boolean> {
+  const raw = await AsyncStorage.getItem(PUSH_ENABLED_KEY);
+  return raw !== "false";
+}
+
+/**
+ * Records the preference and syncs the server: turning it off deletes the token
+ * so this device drops out of the fan-out entirely, rather than the app quietly
+ * discarding notifications it still receives.
+ */
+export async function setPushEnabled(enabled: boolean): Promise<void> {
+  await AsyncStorage.setItem(PUSH_ENABLED_KEY, enabled ? "true" : "false");
+  if (enabled) {
+    await registerForPushNotifications();
+    return;
+  }
+  await unregisterPushNotifications();
+}
+
+/** Removes this device's token from the server and clears the local cache. */
+export async function unregisterPushNotifications(): Promise<void> {
+  const token = await AsyncStorage.getItem(TOKEN_STORAGE_KEY);
+  if (!token) return;
+  try {
+    await fetch(
+      `${API_BASE_URL}/api/push-tokens/${encodeURIComponent(token)}`,
+      { method: "DELETE", headers: { ...apiAuthHeaders() } },
+    );
+  } catch {
+    // Best effort — the local flag still stops re-registration on next launch.
+  }
+  await AsyncStorage.removeItem(TOKEN_STORAGE_KEY);
+}
 
 /** Ensures {@link Notifications.getLastNotificationResponseAsync} is applied at most once per app JS session. */
 let didReplayLaunchNotificationResponse = false;
@@ -58,6 +95,11 @@ export async function registerForPushNotifications(): Promise<RegistrationResult
   // Push notifications require a real device and a development build (not Expo Go).
   if (!Device.isDevice) {
     return { token: null, status: "unsupported", message: "Push requires a real device" };
+  }
+
+  // Respect an explicit opt-out so app launch doesn't silently re-register.
+  if (!(await isPushEnabled())) {
+    return { token: null, status: "denied", message: "Notifications turned off in Settings" };
   }
 
   await ensureAndroidChannel();
@@ -112,7 +154,7 @@ export async function registerForPushNotifications(): Promise<RegistrationResult
     try {
       const res = await fetch(`${API_BASE_URL}/api/push-tokens`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...apiAuthHeaders() },
         body: JSON.stringify({
           token,
           platform: Platform.OS === "ios" ? "ios" : "android",

@@ -75,8 +75,18 @@ export default function EquipmentInventoryScreen() {
 
     const textHeaders = headers.filter((h) => h !== imgKey);
 
+    // Read as one item rather than one stop per cell, which is how a table of
+    // short values otherwise sounds under VoiceOver.
+    const spokenLabel = textHeaders
+      .map((h) => [h, (item[h] ?? "").trim()])
+      .filter(([, v]) => v.length > 0)
+      .map(([h, v]) => `${h}: ${v}`)
+      .join(", ");
+
     return (
       <View
+        accessible
+        accessibilityLabel={spokenLabel || "Equipment item"}
         style={[
           styles.card,
           {
