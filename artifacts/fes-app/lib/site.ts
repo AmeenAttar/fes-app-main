@@ -1,5 +1,5 @@
-/** Default matches api-server `FESCENTER_BASE_URL` before production cutover. */
-const DEFAULT_ORIGIN = "https://fescenter.org/test";
+/** Default matches api-server `FESCENTER_BASE_URL` (production; the /test tier is retired). */
+const DEFAULT_ORIGIN = "https://fescenter.org";
 
 function normalizedOrigin(): string {
   const raw = process.env.EXPO_PUBLIC_FESCENTER_BASE_URL?.trim();

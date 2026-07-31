@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 
+import { FES_GOOGLE_CALENDAR_WEB_URL } from "@/constants/fes-google-calendar-web";
 import { useColors } from "@/hooks/useColors";
 import {
   calendarEventDetailQueryKey,
@@ -21,10 +22,8 @@ import {
   fetchEventById,
   type CalendarEvent,
   type EventActionLinkKind,
+  type EventsResult,
 } from "@/lib/api";
-
-const CALENDAR_HTML_URL =
-  "https://calendar.google.com/calendar/u/0?cid=ZmVzY2FsZW5kYXJAZmVzY2VudGVyLm9yZw";
 
 function hasRsvpLink(event: CalendarEvent): boolean {
   return (
@@ -116,10 +115,10 @@ export default function EventDetailScreen() {
     queryKey: calendarEventDetailQueryKey(eventId ?? ""),
     queryFn: async () => {
       if (!eventId) throw new Error("Missing event id");
-      const list = queryClient.getQueryData<CalendarEvent[]>(
+      const listResult = queryClient.getQueryData<EventsResult>(
         calendarEventsListQueryKey,
       );
-      const fromList = list?.find((e) => e.id === eventId);
+      const fromList = listResult?.events.find((e) => e.id === eventId);
       try {
         return await fetchEventById(eventId);
       } catch (e) {
@@ -293,7 +292,7 @@ export default function EventDetailScreen() {
       )}
 
       <Pressable
-        onPress={() => openInBrowser(CALENDAR_HTML_URL)}
+        onPress={() => openInBrowser(FES_GOOGLE_CALENDAR_WEB_URL)}
         style={({ pressed }) => [
           styles.secondaryCta,
           {

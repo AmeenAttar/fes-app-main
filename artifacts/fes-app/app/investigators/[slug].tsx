@@ -1,9 +1,9 @@
 import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useNavigation } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useQuery } from "@tanstack/react-query";
-import React from "react";
+import React, { useEffect } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -21,6 +21,7 @@ export default function InvestigatorDetailScreen() {
   const params = useLocalSearchParams<{ slug: string }>();
   const slug = params.slug;
   const colors = useColors();
+  const navigation = useNavigation();
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["investigator", slug],
@@ -28,6 +29,15 @@ export default function InvestigatorDetailScreen() {
     enabled: !!slug,
     staleTime: 5 * 60 * 1000,
   });
+
+  // Header starts blank and fills in once the name loads (matches news/[id]).
+  useEffect(() => {
+    if (!data?.name) return;
+    const n = data.name;
+    navigation.setOptions({
+      title: n.length > 36 ? `${n.slice(0, 36)}…` : n,
+    });
+  }, [navigation, data?.name]);
 
   if (isLoading) {
     return (

@@ -2,11 +2,15 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
+import { router } from "expo-router";
 import { Platform } from "react-native";
 
 import { API_BASE_URL } from "./api";
 
 const TOKEN_STORAGE_KEY = "@fes/push-token-v1";
+
+/** Ensures {@link Notifications.getLastNotificationResponseAsync} is applied at most once per app JS session. */
+let didReplayLaunchNotificationResponse = false;
 
 /**
  * iOS/Android only: configure how notifications appear when the app is
@@ -132,4 +136,50 @@ export async function registerForPushNotifications(): Promise<RegistrationResult
   }
 
   return { token, status: "granted" };
+}
+
+function navigateFromPushData(data: Record<string, unknown> | undefined): void {
+  if (!data) return;
+  const raw = data["newsPostId"];
+  if (raw == null) return;
+  const id =
+    typeof raw === "number" && Number.isFinite(raw)
+      ? String(Math.trunc(raw))
+      : typeof raw === "string"
+        ? raw.trim()
+        : "";
+  if (!/^\d+$/u.test(id)) return;
+  router.push({ pathname: "/news/[id]", params: { id } });
+}
+
+function handleNotificationResponse(
+  response: Notifications.NotificationResponse,
+): void {
+  const data = response.notification.request.content
+    .data as Record<string, unknown> | undefined;
+  navigateFromPushData(data);
+}
+
+/**
+ * Opens the in-app news article when the user taps a push whose `data` includes
+ * `newsPostId` (see api-server news push). Subscribes for taps while running
+ * and replays the launch notification after a cold start. No-op on web.
+ * Returns an unsubscribe/cleanup for use in `useEffect`.
+ */
+export function subscribePushNotificationDeepLinks(): () => void {
+  if (Platform.OS === "web") {
+    return () => undefined;
+  }
+
+  const sub = Notifications.addNotificationResponseReceivedListener(
+    handleNotificationResponse,
+  );
+
+  void Notifications.getLastNotificationResponseAsync().then((last) => {
+    if (!last || didReplayLaunchNotificationResponse) return;
+    didReplayLaunchNotificationResponse = true;
+    handleNotificationResponse(last);
+  });
+
+  return () => sub.remove();
 }

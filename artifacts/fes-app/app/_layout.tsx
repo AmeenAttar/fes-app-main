@@ -16,11 +16,13 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AppHeader } from "@/components/AppHeader";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ZoomTransitionProvider } from "@/components/ZoomTransition";
 import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
 import { useColors } from "@/hooks/useColors";
 import {
   configureNotificationHandler,
   registerForPushNotifications,
+  subscribePushNotificationDeepLinks,
 } from "@/lib/push";
 
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -71,6 +73,22 @@ function RootLayoutNav() {
         name="events/[id]"
         options={{ title: "Event" }}
       />
+      {/*
+        Presented over the home screen (not in place of it) so the calendar can
+        scale up as an overlay, the way the nav drawer does. The screen renders
+        its own AppHeader inside the animated container so the header scales
+        with the content instead of popping in at full size.
+      */}
+      <Stack.Screen
+        name="fes-calendar"
+        options={{
+          title: "FES Calendar",
+          headerShown: false,
+          presentation: "transparentModal",
+          animation: "none",
+          contentStyle: { backgroundColor: "transparent" },
+        }}
+      />
       <Stack.Screen
         name="supporting-resources"
         options={{ title: "Supporting Resources" }}
@@ -107,6 +125,11 @@ export default function RootLayout() {
     registerForPushNotifications().catch(() => undefined);
   }, []);
 
+  useEffect(() => {
+    if (!fontsLoaded && !fontError) return;
+    return subscribePushNotificationDeepLinks();
+  }, [fontsLoaded, fontError]);
+
   if (!fontsLoaded && !fontError) return null;
 
   return (
@@ -115,7 +138,9 @@ export default function RootLayout() {
         <ErrorBoundary>
           <QueryClientProvider client={queryClient}>
             <ThemedGestureShell>
-              <RootLayoutNav />
+              <ZoomTransitionProvider>
+                <RootLayoutNav />
+              </ZoomTransitionProvider>
             </ThemedGestureShell>
           </QueryClientProvider>
         </ErrorBoundary>

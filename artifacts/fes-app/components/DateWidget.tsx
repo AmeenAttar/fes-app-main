@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { measureAnchor, type AnchorRect } from "@/components/ZoomTransition";
 import { useColors } from "@/hooks/useColors";
 
 function formatWeekday(d: Date): string {
@@ -23,13 +24,23 @@ function formatAccessibilityLabel(d: Date): string {
   }).format(d);
 }
 
+export interface DateWidgetProps {
+  /**
+   * When set, the pill is a button (e.g. opens the FES calendar screen).
+   * Receives the pill's on-screen rect so the destination can be animated
+   * as if it unfolds from this control (null if it could not be measured).
+   */
+  onPress?: (anchor: AnchorRect | null) => void;
+}
+
 /**
- * Compact date pill displayed on the left of the home-screen header,
- * mirroring the hamburger button. Non-interactive — purely informational.
+ * Compact date pill on the left of the home-screen header, mirroring the
+ * hamburger button. Pass `onPress` to make it open the FES calendar.
  */
-export function DateWidget() {
+export function DateWidget({ onPress }: DateWidgetProps) {
   const colors = useColors();
   const [now, setNow] = useState(() => new Date());
+  const pillRef = useRef<View>(null);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -45,15 +56,9 @@ export function DateWidget() {
     return () => clearInterval(id);
   }, []);
 
-  return (
-    <View
-      style={[
-        styles.box,
-        { backgroundColor: `${colors.primary}12` },
-      ]}
-      accessibilityRole="text"
-      accessibilityLabel={formatAccessibilityLabel(now)}
-    >
+  const pillBg = `${colors.primary}12`;
+  const inner = (
+    <>
       <Text
         style={[styles.weekday, { color: colors.primary }]}
         numberOfLines={1}
@@ -66,6 +71,36 @@ export function DateWidget() {
       >
         {formatDayMonth(now)}
       </Text>
+    </>
+  );
+
+  if (onPress) {
+    return (
+      <Pressable
+        ref={pillRef}
+        onPress={() => {
+          measureAnchor(pillRef).then(onPress);
+        }}
+        style={({ pressed }) => [
+          styles.box,
+          { backgroundColor: pillBg, opacity: pressed ? 0.88 : 1 },
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={`Open FES calendar. ${formatAccessibilityLabel(now)}`}
+        hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+      >
+        {inner}
+      </Pressable>
+    );
+  }
+
+  return (
+    <View
+      style={[styles.box, { backgroundColor: pillBg }]}
+      accessibilityRole="text"
+      accessibilityLabel={formatAccessibilityLabel(now)}
+    >
+      {inner}
     </View>
   );
 }

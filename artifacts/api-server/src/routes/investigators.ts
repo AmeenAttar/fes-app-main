@@ -45,6 +45,54 @@ function extractSlug(detailUrl: string): string {
   return m ? m[1] : detailUrl;
 }
 
+/**
+ * Opening tags of site-wide chrome whose copy would otherwise be scraped into
+ * investigator bios: the Complianz cookie banner and the chat widget footer.
+ */
+const CHROME_CONTAINERS: RegExp[] = [
+  /<div[^>]*\bid="cmplz-cookiebanner-container"/i,
+  /<div[^>]*\bid="cmplz-manage-consent"/i,
+  /<div[^>]*\bclass="[^"]*\bchatbot-footer\b[^"]*"/i,
+];
+
+/** Removes the `<div>` opening at `openIdx` together with everything nested in it. */
+function removeBalancedDiv(html: string, openIdx: number): string {
+  const tagRegex = /<\/?div\b[^>]*>/gi;
+  tagRegex.lastIndex = openIdx;
+  let depth = 0;
+  let m: RegExpExecArray | null;
+  while ((m = tagRegex.exec(html)) !== null) {
+    if (m[0].startsWith("</")) {
+      depth -= 1;
+      if (depth <= 0) {
+        return html.slice(0, openIdx) + html.slice(tagRegex.lastIndex);
+      }
+    } else if (!m[0].endsWith("/>")) {
+      depth += 1;
+    }
+  }
+  // Unbalanced markup — drop the remainder rather than let chrome text through.
+  return html.slice(0, openIdx);
+}
+
+/**
+ * Strips whole chrome containers before paragraphs are collected. Done
+ * structurally so nested markup goes with the container and the filter survives
+ * copy changes in the banner.
+ */
+function stripSiteChrome(html: string): string {
+  let out = html;
+  for (const marker of CHROME_CONTAINERS) {
+    // Bounded so malformed markup can never spin here.
+    for (let i = 0; i < 10; i += 1) {
+      const idx = out.search(marker);
+      if (idx < 0) break;
+      out = removeBalancedDiv(out, idx);
+    }
+  }
+  return out;
+}
+
 function parseInvestigators(html: string): Investigator[] {
   const results: Investigator[] = [];
   const personRegex = /<div class="person">([\s\S]*?)<\/div>/g;
@@ -106,13 +154,17 @@ function parseInvestigatorDetail(
   const pRegex = /<p[^>]*>([\s\S]*?)<\/p>/g;
   const bio: string[] = [];
   let pMatch: RegExpExecArray | null;
-  while ((pMatch = pRegex.exec(html)) !== null) {
+  const content = stripSiteChrome(html);
+  while ((pMatch = pRegex.exec(content)) !== null) {
     const text = stripTags(pMatch[1]);
     if (text.length < 30) continue;
     if (/Cleveland FES Center Operations/i.test(text)) continue;
     if (INFO_EMAIL_REGEX.test(text)) continue;
     if (/^Copyright/i.test(text)) continue;
     if (/All Rights Reserved/i.test(text)) continue;
+    // Backstop for the same chrome in case the plugin markup changes.
+    if (/Manage Cookie Consent|technical storage or access/i.test(text)) continue;
+    if (/^By chatting, you agree/i.test(text)) continue;
     if (bio.includes(text)) continue;
     bio.push(text);
   }

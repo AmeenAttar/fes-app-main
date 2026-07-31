@@ -1,9 +1,12 @@
 import { Feather } from "@expo/vector-icons";
+import { useQuery } from "@tanstack/react-query";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,16 +14,25 @@ import {
 } from "react-native";
 
 import { ResourceContactModal } from "@/components/ResourceContactModal";
-import {
-  SUPPORTING_RESOURCES,
-  type ResourceContact,
-} from "@/constants/supporting-resources";
+import { type ResourceContact } from "@/constants/supporting-resources";
 import { useColors } from "@/hooks/useColors";
+import {
+  fetchSupportingResourcesSheet,
+  supportingResourcesSheetQueryKey,
+} from "@/lib/api";
 import { openMailtoDraft } from "@/lib/mailto";
 
 export default function SupportingResourcesScreen() {
   const colors = useColors();
   const [selected, setSelected] = useState<ResourceContact | null>(null);
+
+  const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
+    queryKey: supportingResourcesSheetQueryKey,
+    queryFn: fetchSupportingResourcesSheet,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const categories = data ?? [];
 
   const quickMailto = async (c: ResourceContact) => {
     const ok = await openMailtoDraft({ to: c.email });
@@ -32,18 +44,99 @@ export default function SupportingResourcesScreen() {
     }
   };
 
+  if (isLoading) {
+    return (
+      <View
+        style={[
+          styles.centered,
+          { backgroundColor: colors.background, flex: 1 },
+        ]}
+      >
+        <ActivityIndicator color={colors.primary} />
+        <Text style={[styles.centerHint, { color: colors.mutedForeground }]}>
+          Loading contacts…
+        </Text>
+      </View>
+    );
+  }
+
+  if (isError) {
+    return (
+      <View
+        style={[
+          styles.centered,
+          {
+            backgroundColor: colors.background,
+            flex: 1,
+            paddingHorizontal: 32,
+          },
+        ]}
+      >
+        <Feather name="wifi-off" size={28} color={colors.mutedForeground} />
+        <Text style={[styles.errTitle, { color: colors.foreground }]}>
+          Couldn’t load supporting resources
+        </Text>
+        <Text
+          style={[
+            styles.centerHint,
+            { color: colors.mutedForeground, textAlign: "center" },
+          ]}
+        >
+          {error instanceof Error ? error.message : "Please try again."}
+        </Text>
+        <Pressable
+          onPress={() => refetch()}
+          style={({ pressed }) => [
+            styles.retryBtn,
+            {
+              backgroundColor: colors.primary,
+              borderRadius: colors.radius,
+              opacity: pressed ? 0.9 : 1,
+            },
+          ]}
+        >
+          <Text style={[styles.retryText, { color: colors.primaryForeground }]}>
+            Retry
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
     <>
       <ScrollView
         style={{ backgroundColor: colors.background }}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={() => refetch()}
+            tintColor={colors.primary}
+          />
+        }
       >
         <Text style={[styles.lead, { color: colors.mutedForeground }]}>
           Reach out to the right person for the support you need.
         </Text>
 
-        {SUPPORTING_RESOURCES.map((cat) => {
+        {categories.length === 0 ? (
+          <View style={styles.emptyWrap}>
+            <Feather name="inbox" size={28} color={colors.mutedForeground} />
+            <Text style={[styles.errTitle, { color: colors.foreground }]}>
+              No contacts in sheet
+            </Text>
+            <Text
+              style={[styles.centerHint, { color: colors.mutedForeground }]}
+            >
+              Add rows to the “Supporting Resources” tab (Category, Name,
+              Email).
+            </Text>
+          </View>
+        ) : null}
+
+        {categories.map((cat) => {
           const multi = cat.contacts.length > 1;
           return (
             <View
@@ -145,6 +238,36 @@ export default function SupportingResourcesScreen() {
 }
 
 const styles = StyleSheet.create({
+  centered: {
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 10,
+  },
+  centerHint: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    marginTop: 4,
+  },
+  errTitle: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 17,
+    marginTop: 8,
+    textAlign: "center",
+  },
+  retryBtn: {
+    marginTop: 16,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+  },
+  retryText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 15,
+  },
+  emptyWrap: {
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 24,
+  },
   content: {
     padding: 20,
     paddingBottom: 40,

@@ -1,17 +1,11 @@
-import { Expo, type ExpoPushMessage, type ExpoPushTicket } from "expo-server-sdk";
 import { and, eq } from "drizzle-orm";
 
-import {
-  db,
-  pushTokensTable,
-  sentNotificationsTable,
-  type PushToken,
-} from "@workspace/db";
+import { db, pushTokensTable, sentNotificationsTable } from "@workspace/db";
 
 import { loadEvents, type EventDto } from "../routes/events";
+import { NEWS_PUSH_POLL_INTERVAL_MS, processNewsPushOnce } from "./news-push";
 import { logger } from "./logger";
-
-const expo = new Expo();
+import { sendToAllDevices } from "./push-delivery";
 
 /** How often the scheduler re-checks the calendar. */
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -61,54 +55,6 @@ function formatTimeSuffix(e: EventDto): string {
     return ` · ${time} ET`;
   } catch {
     return "";
-  }
-}
-
-async function sendToAllDevices(
-  message: Omit<ExpoPushMessage, "to">,
-  tokens: PushToken[],
-): Promise<void> {
-  const validTokens = tokens
-    .map((t) => t.token)
-    .filter((tok) => Expo.isExpoPushToken(tok));
-
-  if (validTokens.length === 0) return;
-
-  const messages: ExpoPushMessage[] = validTokens.map((to) => ({
-    ...message,
-    to,
-    sound: "default",
-    priority: "high",
-  }));
-
-  const chunks = expo.chunkPushNotifications(messages);
-  const tickets: ExpoPushTicket[] = [];
-  for (const chunk of chunks) {
-    try {
-      const result = await expo.sendPushNotificationsAsync(chunk);
-      tickets.push(...result);
-    } catch (err) {
-      logger.error({ err }, "Failed to send push chunk");
-    }
-  }
-
-  // Clean up tokens that the push service rejected as invalid.
-  for (let i = 0; i < tickets.length; i += 1) {
-    const ticket = tickets[i];
-    const tok = validTokens[i];
-    if (!ticket || !tok) continue;
-    if (ticket.status === "error") {
-      const code = ticket.details?.error;
-      if (code === "DeviceNotRegistered") {
-        await db
-          .delete(pushTokensTable)
-          .where(eq(pushTokensTable.token, tok))
-          .catch(() => undefined);
-        logger.info({ token: tok.slice(0, 24) + "…" }, "Removed unregistered token");
-      } else {
-        logger.warn({ ticket }, "Push ticket error");
-      }
-    }
   }
 }
 
@@ -188,15 +134,25 @@ export function startNotificationScheduler(): void {
   if (started) return;
   started = true;
 
-  // Run once on startup, then on an interval.
   processOnce().catch((err) => logger.error({ err }, "Initial scheduler run failed"));
 
   setInterval(() => {
     processOnce().catch((err) => logger.error({ err }, "Scheduler tick failed"));
   }, POLL_INTERVAL_MS);
 
+  processNewsPushOnce().catch((err) =>
+    logger.error({ err }, "Initial news push run failed"),
+  );
+
+  setInterval(() => {
+    processNewsPushOnce().catch((err) => logger.error({ err }, "News push tick failed"));
+  }, NEWS_PUSH_POLL_INTERVAL_MS);
+
   logger.info(
-    { intervalMinutes: POLL_INTERVAL_MS / 60000 },
+    {
+      eventIntervalMinutes: POLL_INTERVAL_MS / 60000,
+      newsIntervalHours: NEWS_PUSH_POLL_INTERVAL_MS / 3600000,
+    },
     "Notification scheduler started",
   );
 }

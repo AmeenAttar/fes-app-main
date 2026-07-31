@@ -113,15 +113,14 @@ External dependencies:
 | `SESSION_SECRET` | Yes | — | Express session secret (currently only required by middleware; no session routes yet) |
 | `NODE_ENV` | No | `development` | Set to `production` for deployed environments |
 
-**Planned env vars (not yet implemented — see Task #1 and Task #3 and Task #3):**
+**Planned env vars (not yet implemented — see Task #1 and Task #3):**
 
 | Variable | Description |
 |---|---|
 | `FESCENTER_BASE_URL` | Base URL for FES Center website scraping (default: `https://fescenter.org/test`) |
 | `ADDEVENT_API_KEY` | AddEvent REST API v2 bearer token (Task #3) |
-| `GOOGLE_SHEETS_API_KEY` | Google Cloud API key for Sheets v4 (Task #4) |
-| `INVENTORY_SHEET_ID` | Google Sheet ID for equipment inventory (Task #4) |
-| `INVENTORY_SHEET_NAME` | Tab name in the Google Sheet (default: `Sheet1`) |
+
+**Google Sheets (implemented):** `GOOGLE_SHEETS_API_KEY`, `GOOGLE_SHEETS_SPREADSHEET_ID` / `INVENTORY_SHEET_ID`, `INVENTORY_SHEET_NAME` (default `Equipment`), `SUPPORTING_RESOURCES_SHEET_NAME` (default `Supporting Resources`). Full production steps: `handover-google-sheets-production.md`.
 
 ### fes-app (Expo, set in eas.json or .env)
 

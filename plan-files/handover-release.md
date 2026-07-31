@@ -107,6 +107,8 @@ Edit `artifacts/fes-app/eas.json` and replace all `REPLACE_WITH_*` values:
 ### Step 4 — Deploy the API Server
 The app requires a live API server. Deploy `artifacts/api-server` to Replit (or another host). Set the deployment domain as `EXPO_PUBLIC_DOMAIN` in all `eas.json` build profiles.
 
+For **Supporting Resources** and **Equipment Inventory** (Google Sheets), configure `GOOGLE_SHEETS_API_KEY` and related vars on the **same** deployed API. Follow **`plan-files/handover-google-sheets-production.md`** so production secrets and sheet sharing are correct before App Store submission.
+
 ### Step 5 — Build for TestFlight
 ```bash
 cd artifacts/fes-app

@@ -1,3 +1,5 @@
+import type { ResourceCategory } from "@/constants/supporting-resources";
+
 const RAW_DOMAIN = process.env.EXPO_PUBLIC_DOMAIN ?? "";
 
 function getBaseUrl(): string {
@@ -83,14 +85,27 @@ export interface CalendarEvent {
 
 interface EventsResponse {
   events: CalendarEvent[];
+  stale?: boolean;
+  fetchedAt?: number;
 }
 
 interface EventDetailResponse {
   event: CalendarEvent;
+  stale?: boolean;
+  fetchedAt?: number;
+}
+
+/** Events plus whether the server served them from cache after a failed refresh. */
+export interface EventsResult {
+  events: CalendarEvent[];
+  /** True when the calendar feed was unreachable and cached events were served. */
+  stale: boolean;
+  /** Epoch ms the data was fetched from the calendar, when known. */
+  fetchedAt: number | null;
 }
 
 /** Bump when the calendar API payload shape changes (busts in-memory TanStack caches / Fast Refresh). */
-export const CALENDAR_EVENTS_QUERY_VERSION = 2 as const;
+export const CALENDAR_EVENTS_QUERY_VERSION = 3 as const;
 
 export const calendarEventsListQueryKey = [
   "events",
@@ -109,16 +124,39 @@ const calendarApiFetchInit: RequestInit = {
   },
 };
 
-export async function fetchEvents(): Promise<CalendarEvent[]> {
+/** Prefer the server's human-readable message (e.g. calendar rate-limited) over a bare status. */
+async function calendarErrorMessage(
+  res: globalThis.Response,
+  fallback: string,
+): Promise<string> {
+  try {
+    const body = (await res.json()) as { message?: unknown; error?: unknown };
+    const msg =
+      (typeof body.message === "string" && body.message) ||
+      (typeof body.error === "string" && body.error);
+    if (msg) return msg;
+  } catch {
+    /* non-JSON error body */
+  }
+  return fallback;
+}
+
+export async function fetchEvents(): Promise<EventsResult> {
   const res = await fetch(
     `${API_BASE_URL}/api/events`,
     calendarApiFetchInit,
   );
   if (!res.ok) {
-    throw new Error(`Failed to load events (${res.status})`);
+    throw new Error(
+      await calendarErrorMessage(res, `Failed to load events (${res.status})`),
+    );
   }
   const json = (await res.json()) as EventsResponse;
-  return json.events;
+  return {
+    events: json.events,
+    stale: json.stale === true,
+    fetchedAt: typeof json.fetchedAt === "number" ? json.fetchedAt : null,
+  };
 }
 
 export async function fetchEventById(eventId: string): Promise<CalendarEvent> {
@@ -130,7 +168,9 @@ export async function fetchEventById(eventId: string): Promise<CalendarEvent> {
     throw new Error("Event not found");
   }
   if (!res.ok) {
-    throw new Error(`Failed to load event (${res.status})`);
+    throw new Error(
+      await calendarErrorMessage(res, `Failed to load event (${res.status})`),
+    );
   }
   const json = (await res.json()) as EventDetailResponse;
   return json.event;
@@ -279,4 +319,66 @@ export async function fetchWeather(): Promise<WeatherResponse> {
     throw new Error(`Failed to load weather (${res.status})`);
   }
   return (await res.json()) as WeatherResponse;
+}
+
+/** Bump when `/api/supporting-resources` payload shape changes. */
+export const SUPPORTING_RESOURCES_SHEET_QUERY_VERSION = 1 as const;
+
+export const supportingResourcesSheetQueryKey = [
+  "supporting-resources",
+  SUPPORTING_RESOURCES_SHEET_QUERY_VERSION,
+] as const;
+
+const sheetsFetchInit: RequestInit = {
+  cache: "no-store",
+  headers: {
+    "Cache-Control": "no-cache, no-store",
+    Pragma: "no-cache",
+  },
+};
+
+export async function fetchSupportingResourcesSheet(): Promise<
+  ResourceCategory[]
+> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/supporting-resources`,
+    sheetsFetchInit,
+  );
+  if (!res.ok) {
+    let detail = `Failed to load supporting resources (${res.status})`;
+    try {
+      const body = (await res.json()) as { message?: unknown };
+      if (typeof body.message === "string" && body.message) detail = body.message;
+    } catch {
+      /* non-JSON */
+    }
+    throw new Error(detail);
+  }
+  const json = (await res.json()) as { categories?: ResourceCategory[] };
+  return Array.isArray(json.categories) ? json.categories : [];
+}
+
+/** Bump when `/api/inventory` payload shape changes. */
+export const INVENTORY_QUERY_VERSION = 1 as const;
+
+export const inventoryQueryKey = ["inventory", INVENTORY_QUERY_VERSION] as const;
+
+export interface InventoryPayload {
+  headers: string[];
+  items: Record<string, string>[];
+}
+
+export async function fetchInventory(): Promise<InventoryPayload> {
+  const res = await fetch(`${API_BASE_URL}/api/inventory`, sheetsFetchInit);
+  if (!res.ok) {
+    let detail = `Failed to load inventory (${res.status})`;
+    try {
+      const body = (await res.json()) as { message?: unknown };
+      if (typeof body.message === "string" && body.message) detail = body.message;
+    } catch {
+      /* non-JSON */
+    }
+    throw new Error(detail);
+  }
+  return (await res.json()) as InventoryPayload;
 }

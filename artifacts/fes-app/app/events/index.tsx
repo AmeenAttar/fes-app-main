@@ -14,15 +14,14 @@ import {
   View,
 } from "react-native";
 
+import { StaleNotice } from "@/components/StaleNotice";
+import { FES_GOOGLE_CALENDAR_WEB_URL } from "@/constants/fes-google-calendar-web";
 import { useColors } from "@/hooks/useColors";
 import {
   calendarEventsListQueryKey,
   fetchEvents,
   type CalendarEvent,
 } from "@/lib/api";
-
-const CALENDAR_HTML_URL =
-  "https://calendar.google.com/calendar/u/0?cid=ZmVzY2FsZW5kYXJAZmVzY2VudGVyLm9yZw";
 
 export default function EventsScreen() {
   const colors = useColors();
@@ -35,13 +34,13 @@ export default function EventsScreen() {
 
   const openCalendar = async () => {
     try {
-      await WebBrowser.openBrowserAsync(CALENDAR_HTML_URL, {
+      await WebBrowser.openBrowserAsync(FES_GOOGLE_CALENDAR_WEB_URL, {
         presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
         toolbarColor: colors.primary,
         controlsColor: "#FFFFFF",
       });
     } catch {
-      Linking.openURL(CALENDAR_HTML_URL).catch(() => undefined);
+      Linking.openURL(FES_GOOGLE_CALENDAR_WEB_URL).catch(() => undefined);
     }
   };
 
@@ -92,7 +91,7 @@ export default function EventsScreen() {
     <FlatList
       style={{ backgroundColor: colors.background }}
       contentContainerStyle={styles.listContent}
-      data={data ?? []}
+      data={data?.events ?? []}
       keyExtractor={(e) => e.id}
       refreshControl={
         <RefreshControl
@@ -103,6 +102,7 @@ export default function EventsScreen() {
       }
       ListHeaderComponent={
         <View style={styles.headerBlock}>
+          {data?.stale ? <StaleNotice /> : null}
           <Pressable
             onPress={openCalendar}
             style={({ pressed }) => [
