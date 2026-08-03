@@ -11,6 +11,7 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { ApiError } from "./lib/http-errors";
 import { logger } from "./lib/logger";
+import { captureError } from "./lib/monitoring";
 import { corsOptions } from "./lib/security";
 
 const app: Express = express();
@@ -81,6 +82,7 @@ app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
   }
 
   req.log?.error({ err }, "Unhandled error");
+  captureError(err, { path: req.path, method: req.method });
   res.status(500).json({
     error: "internal_error",
     message: "Something went wrong on our end. Please try again.",

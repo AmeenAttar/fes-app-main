@@ -5,6 +5,7 @@ import { db, pushTokensTable, sentNotificationsTable } from "@workspace/db";
 import { loadEvents, type EventDto } from "../routes/events";
 import { NEWS_PUSH_POLL_INTERVAL_MS, processNewsPushOnce } from "./news-push";
 import { logger } from "./logger";
+import { captureError } from "./monitoring";
 import { sendToAllDevices } from "./push-delivery";
 import { eventStartMs, FES_TIMEZONE } from "./time";
 
@@ -93,6 +94,7 @@ async function processOnce(): Promise<void> {
     events = await loadEvents();
   } catch (err) {
     logger.error({ err }, "Scheduler: failed to load events");
+    captureError(err, { job: "event-reminders" });
     return;
   }
 
@@ -197,6 +199,7 @@ async function runEventsTick(): Promise<void> {
     await processOnce();
   } catch (err) {
     logger.error({ err }, "Scheduler tick failed");
+    captureError(err, { job: "event-reminders" });
   } finally {
     eventsRunning = false;
   }
@@ -209,6 +212,7 @@ async function runNewsTick(): Promise<void> {
     await processNewsPushOnce();
   } catch (err) {
     logger.error({ err }, "News push tick failed");
+    captureError(err, { job: "news-push" });
   } finally {
     newsRunning = false;
   }

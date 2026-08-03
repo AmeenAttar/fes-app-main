@@ -1,4 +1,6 @@
 import { Router, type IRouter } from "express";
+
+import { captureError, captureWarning } from "../lib/monitoring";
 import {
   FESCENTER_HOSTNAME,
   INVESTIGATORS_LIST_URL,
@@ -211,6 +213,8 @@ router.get("/investigators", async (req, res) => {
     res.json({ investigators, cached: false });
   } catch (err) {
     req.log.error({ err }, "Failed to fetch investigators");
+    // The scraper breaking is the failure this project has actually hit twice.
+    captureError(err, { route: "investigators", source: SOURCE_URL });
     res.status(502).json({
       error: `Unable to load investigators from ${FESCENTER_HOSTNAME}`,
       message: err instanceof Error ? err.message : String(err),
@@ -255,12 +259,17 @@ router.get("/investigators/:slug", async (req, res) => {
         { slug, url: base.detailUrl },
         "Investigator detail parsed with an empty bio — check upstream markup",
       );
+      captureWarning("Investigator detail parsed with an empty bio", {
+        slug,
+        url: base.detailUrl,
+      });
     }
 
     detailCache.set(slug, { data: detail, fetchedAt: Date.now() });
     res.json({ investigator: detail, cached: false });
   } catch (err) {
     req.log.error({ err }, "Failed to fetch investigator detail");
+    captureError(err, { route: "investigator-detail", slug: req.params["slug"] });
     res.status(502).json({
       error: `Unable to load investigator detail from ${FESCENTER_HOSTNAME}`,
       message: err instanceof Error ? err.message : String(err),

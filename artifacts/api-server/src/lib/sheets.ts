@@ -4,6 +4,7 @@
  */
 
 import { logger } from "./logger";
+import { captureWarning } from "./monitoring";
 
 const DEFAULT_SPREADSHEET_ID =
   "1EbT3Y1KQdMKUxrHhmezTnALdW3avdrkCrCft4mxt2kY";
@@ -94,6 +95,10 @@ export async function fetchSheetFormattedValues(
       const stale = sheetCache.get(key);
       if (stale && Date.now() - stale.ts < SHEET_STALE_MAX_MS) {
         logger.warn({ key, err }, "Sheets fetch failed; serving cached copy");
+        captureWarning("Sheets fetch failed; serving cached copy", {
+          range: rangeA1,
+          reason: err instanceof Error ? err.message : String(err),
+        });
         return stale.data;
       }
       throw err;

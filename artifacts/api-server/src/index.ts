@@ -1,3 +1,8 @@
+// Initialised before the app is imported so early failures are still captured.
+import { flushMonitoring, initMonitoring } from "./lib/monitoring";
+
+initMonitoring();
+
 import app from "./app";
 import { logger } from "./lib/logger";
 import {
@@ -44,8 +49,10 @@ function shutdown(signal: string): void {
 
   stopNotificationScheduler();
   server.close(() => {
-    logger.info("HTTP server closed");
-    process.exit(0);
+    void flushMonitoring().then(() => {
+      logger.info("HTTP server closed");
+      process.exit(0);
+    });
   });
 
   // Don't hang forever on a stuck connection.
