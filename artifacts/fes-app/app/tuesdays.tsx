@@ -15,7 +15,7 @@ import {
 } from "react-native";
 
 import { StaleNotice } from "@/components/StaleNotice";
-import { PROJECT_REVIEW_CONTACT } from "@/constants/supporting-resources";
+import { FIRST_TUESDAY_CONTACT } from "@/constants/supporting-resources";
 import { useColors } from "@/hooks/useColors";
 import {
   calendarEventsListQueryKey,
@@ -32,7 +32,7 @@ const SIGN_UP_SUBJECT = "First Tuesday — speaker sign-up";
 
 function signUpBody(): string {
   return [
-    `Hi ${PROJECT_REVIEW_CONTACT.name.split(" ")[0]},`,
+    `Hi ${FIRST_TUESDAY_CONTACT.name.split(" ")[0]},`,
     "",
     "I'd like to sign up for an upcoming FES Center First Tuesday.",
     "",
@@ -85,7 +85,7 @@ export default function TuesdaysScreen() {
   const openSignUp = () => {
     if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => undefined);
     const url =
-      `mailto:${PROJECT_REVIEW_CONTACT.email}` +
+      `mailto:${FIRST_TUESDAY_CONTACT.email}` +
       `?subject=${encodeURIComponent(SIGN_UP_SUBJECT)}` +
       `&body=${encodeURIComponent(signUpBody())}`;
     Linking.openURL(url).catch(() => undefined);
@@ -102,20 +102,20 @@ export default function TuesdaysScreen() {
       </Text>
       <Text style={[styles.sub, { color: colors.mutedForeground }]}>
         To present at an upcoming session, or to nominate a speaker, email{" "}
-        {PROJECT_REVIEW_CONTACT.name} with the date you have in mind.
+        {FIRST_TUESDAY_CONTACT.name} with the date you have in mind.
       </Text>
 
       <Pressable
         onPress={openSignUp}
         accessibilityRole="button"
-        accessibilityLabel={`Email ${PROJECT_REVIEW_CONTACT.name} to sign up for a First Tuesday`}
+        accessibilityLabel={`Email ${FIRST_TUESDAY_CONTACT.name} to sign up for a First Tuesday`}
         style={({ pressed }) => [
           styles.cta,
           { backgroundColor: colors.primary, opacity: pressed ? 0.9 : 1 },
         ]}
       >
         <Feather name="mail" size={18} color="#FFFFFF" />
-        <Text style={styles.ctaText}>Email {PROJECT_REVIEW_CONTACT.name}</Text>
+        <Text style={styles.ctaText}>Email {FIRST_TUESDAY_CONTACT.name}</Text>
       </Pressable>
 
       <Text style={[styles.sectionLabel, { color: colors.secondary }]}>
@@ -163,7 +163,7 @@ export default function TuesdaysScreen() {
           <Feather name="calendar" size={22} color={colors.mutedForeground} />
           <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
             No sessions are on the calendar yet. Email{" "}
-            {PROJECT_REVIEW_CONTACT.name} and she can tell you what’s planned.
+            {FIRST_TUESDAY_CONTACT.name} and she can tell you what’s planned.
           </Text>
         </View>
       ) : (

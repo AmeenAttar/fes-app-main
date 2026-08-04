@@ -74,3 +74,13 @@ export const PROJECT_REVIEW_CONTACT = {
   name: "Cheryl Dudek",
   email: "cheryl.dudek@FEScenter.org",
 };
+
+/**
+ * Speaker sign-ups for First Tuesday. Separate from
+ * {@link PROJECT_REVIEW_CONTACT} because the address differs: this one matches
+ * what the Center publishes in the calendar entry for the meeting.
+ */
+export const FIRST_TUESDAY_CONTACT = {
+  name: "Cheryl Dudek",
+  email: "cdudek@fescenter.org",
+};
