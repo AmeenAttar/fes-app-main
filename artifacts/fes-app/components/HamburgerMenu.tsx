@@ -11,7 +11,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   useWindowDimensions,
   View,
@@ -85,7 +84,7 @@ interface NavMenuModalProps {
 function NavMenuModal({ open, anchor, onClose }: NavMenuModalProps) {
   const insets = useSafeAreaInsets();
   const colors = useColors();
-  const { scheme, setScheme } = useTheme();
+  const { scheme } = useTheme();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const isDark = scheme === "dark";
 
@@ -307,48 +306,6 @@ function NavMenuModal({ open, anchor, onClose }: NavMenuModalProps) {
               <Feather name="chevron-right" size={18} color={muted} />
             </Pressable>
 
-            <View style={[styles.themeRow, { borderTopColor: border }]}>
-              <View
-                style={[
-                  styles.themeCluster,
-                  {
-                    backgroundColor:
-                      scheme === "dark"
-                        ? "rgba(255,255,255,0.10)"
-                        : "rgba(0, 35, 58, 0.45)",
-                  },
-                ]}
-              >
-                <Feather name={isDark ? "moon" : "sun"} size={18} color={fg} />
-                <Text style={[styles.themeLabel, { color: fg }]}>
-                  Appearance
-                </Text>
-                <Switch
-                  accessibilityRole="switch"
-                  accessibilityLabel="Appearance"
-                  accessibilityHint={
-                    isDark
-                      ? "Turn off to use light colors across the app"
-                      : "Turn on to use dark colors across the app"
-                  }
-                  value={isDark}
-                  onValueChange={(on) => setScheme(on ? "dark" : "light")}
-                  trackColor={{
-                    false:
-                      scheme === "dark"
-                        ? "rgba(255,255,255,0.35)"
-                        : "rgba(0, 28, 48, 0.95)",
-                    true: colors.menuHomeHighlight,
-                  }}
-                  thumbColor="#f8fafc"
-                  ios_backgroundColor={
-                    scheme === "dark"
-                      ? "rgba(255,255,255,0.28)"
-                      : "rgba(0, 28, 48, 0.92)"
-                  }
-                />
-              </View>
-            </View>
           </View>
         </ScrollView>
       </Animated.View>
@@ -428,26 +385,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     letterSpacing: 1,
     textTransform: "uppercase",
-  },
-  themeRow: {
-    alignItems: "center",
-    paddingTop: 16,
-    marginTop: 10,
-    paddingBottom: 4,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  themeCluster: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    maxWidth: "100%",
-  },
-  themeLabel: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 14,
-    letterSpacing: 0.3,
   },
 });
