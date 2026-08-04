@@ -1,10 +1,12 @@
 import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { useLocalSearchParams } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import React from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   Platform,
   Pressable,
@@ -16,6 +18,7 @@ import {
 
 import { FES_GOOGLE_CALENDAR_WEB_URL } from "@/constants/fes-google-calendar-web";
 import { useColors } from "@/hooks/useColors";
+import { addEventToCalendar } from "@/lib/add-to-calendar";
 import {
   calendarEventDetailQueryKey,
   calendarEventsListQueryKey,
@@ -130,6 +133,22 @@ export default function EventDetailScreen() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const [addState, setAddState] = useState<"idle" | "working" | "saved">(
+    "idle",
+  );
+
+  const onAddToCalendar = async () => {
+    if (!data || addState === "working") return;
+    if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => undefined);
+    setAddState("working");
+    const result = await addEventToCalendar(data);
+    setAddState(result.status === "saved" ? "saved" : "idle");
+
+    if (result.status === "unsupported" || result.status === "error") {
+      Alert.alert("Couldn’t add to calendar", result.message);
+    }
+  };
+
   const openInBrowser = async (url: string) => {
     try {
       await WebBrowser.openBrowserAsync(url, {
@@ -224,6 +243,40 @@ export default function EventDetailScreen() {
           {data.description}
         </Text>
       ) : null}
+
+      <Pressable
+        onPress={onAddToCalendar}
+        disabled={addState === "working"}
+        accessibilityRole="button"
+        accessibilityLabel={
+          addState === "saved"
+            ? "Added to your calendar. Tap to add again."
+            : `Add ${data.title} to your calendar`
+        }
+        style={({ pressed }) => [
+          styles.cta,
+          {
+            backgroundColor: colors.primary,
+            borderRadius: colors.radius,
+            opacity: pressed || addState === "working" ? 0.85 : 1,
+          },
+        ]}
+      >
+        {addState === "working" ? (
+          <ActivityIndicator color="#FFFFFF" />
+        ) : (
+          <>
+            <Feather
+              name={addState === "saved" ? "check" : "calendar"}
+              size={18}
+              color="#FFFFFF"
+            />
+            <Text style={styles.ctaText}>
+              {addState === "saved" ? "Added to calendar" : "Add to my calendar"}
+            </Text>
+          </>
+        )}
+      </Pressable>
 
       {showActionLinks ? (
         <>
