@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
-import React, { useState } from "react";
+import React from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -13,7 +13,6 @@ import {
   View,
 } from "react-native";
 
-import { ResourceContactModal } from "@/components/ResourceContactModal";
 import { type ResourceContact } from "@/constants/supporting-resources";
 import { useColors } from "@/hooks/useColors";
 import {
@@ -24,7 +23,6 @@ import { openMailtoDraft } from "@/lib/mailto";
 
 export default function SupportingResourcesScreen() {
   const colors = useColors();
-  const [selected, setSelected] = useState<ResourceContact | null>(null);
 
   const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: supportingResourcesQueryKey,
@@ -104,151 +102,119 @@ export default function SupportingResourcesScreen() {
   }
 
   return (
-    <>
-      <ScrollView
-        style={{ backgroundColor: colors.background }}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefetching}
-            onRefresh={() => refetch()}
-            tintColor={colors.primary}
-          />
-        }
-      >
-        <Text style={[styles.lead, { color: colors.mutedForeground }]}>
-          Reach out to the right person for the support you need.
-        </Text>
+    <ScrollView
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefetching}
+          onRefresh={() => refetch()}
+          tintColor={colors.primary}
+        />
+      }
+    >
+      <Text style={[styles.lead, { color: colors.mutedForeground }]}>
+        Reach out to the right person for the support you need.
+      </Text>
 
-        {categories.length === 0 ? (
-          <View style={styles.emptyWrap}>
-            <Feather name="inbox" size={28} color={colors.mutedForeground} />
-            <Text style={[styles.errTitle, { color: colors.foreground }]}>
-              No contacts listed
-            </Text>
-            <Text
-              style={[styles.centerHint, { color: colors.mutedForeground }]}
-            >
-              Nothing is published on the Supporting Resources page yet.
-            </Text>
-          </View>
-        ) : null}
+      {categories.length === 0 ? (
+        <View style={styles.emptyWrap}>
+          <Feather name="inbox" size={28} color={colors.mutedForeground} />
+          <Text style={[styles.errTitle, { color: colors.foreground }]}>
+            No contacts listed
+          </Text>
+          <Text
+            style={[styles.centerHint, { color: colors.mutedForeground }]}
+          >
+            Nothing is published on the Supporting Resources page yet.
+          </Text>
+        </View>
+      ) : null}
 
-        {categories.map((cat) => {
-          const multi = cat.contacts.length > 1;
-          return (
-            <View
-              key={cat.id}
-              style={[
-                styles.card,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: colors.border,
-                  borderRadius: colors.radius,
-                },
-              ]}
-            >
-              <Text style={[styles.catTitle, { color: colors.primary }]}>
-                {cat.title}
-              </Text>
-              {multi ? (
-                <Text
-                  style={[styles.multiHint, { color: colors.mutedForeground }]}
+      {categories.map((cat) => {
+        const multi = cat.contacts.length > 1;
+        return (
+          <View
+            key={cat.id}
+            style={[
+              styles.card,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                borderRadius: colors.radius,
+              },
+            ]}
+          >
+            <Text style={[styles.catTitle, { color: colors.primary }]}>
+              {cat.title}
+            </Text>
+            <View style={styles.contactsWrap}>
+              {cat.contacts.map((c, i) => (
+                <View
+                  key={`${c.email}-${i}`}
+                  style={[
+                    styles.contactRow,
+                    multi && i > 0
+                      ? [
+                          styles.contactRowDivider,
+                          { borderTopColor: colors.border },
+                        ]
+                      : null,
+                  ]}
                 >
-                  Tap the name to write a message, or the mail icon for a blank
-                  email in your mail app.
-                </Text>
-              ) : null}
-              <View style={styles.contactsWrap}>
-                {cat.contacts.map((c, i) => (
-                  <View
-                    key={`${c.email}-${i}`}
-                    style={[
-                      styles.contactRow,
-                      multi && i > 0
-                        ? [
-                            styles.contactRowDivider,
-                            { borderTopColor: colors.border },
-                          ]
-                        : null,
-                    ]}
-                  >
+                  <View style={styles.contactMain}>
+                    <Text
+                      style={[styles.contactName, { color: colors.foreground }]}
+                    >
+                      {c.name}
+                    </Text>
+                    {c.role ? (
+                      <Text
+                        style={[
+                          styles.contactRole,
+                          { color: colors.mutedForeground },
+                        ]}
+                      >
+                        {c.role}
+                      </Text>
+                    ) : null}
+                    {c.email ? (
+                      <Text
+                        style={[styles.contactEmail, { color: colors.secondary }]}
+                      >
+                        {c.email}
+                      </Text>
+                    ) : null}
+                  </View>
+                  {c.email ? (
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel={`Message ${c.name}`}
-                      accessibilityHint="Opens a form, then your mail app with a draft"
-                      onPress={() => setSelected(c)}
-                      // Nothing to send to when the page lists a name only.
-                      disabled={!c.email}
+                      accessibilityLabel={`Email ${c.name}`}
+                      accessibilityHint="Opens your mail app addressed to this person"
+                      onPress={() => void quickMailto(c)}
+                      hitSlop={8}
                       android_ripple={
                         Platform.OS === "android"
-                          ? { color: `${colors.primary}22` }
+                          ? { color: `${colors.secondary}33`, foreground: true }
                           : undefined
                       }
                       style={({ pressed }) => [
-                        styles.contactMain,
-                        pressed && Platform.OS === "ios" ? { opacity: 0.82 } : null,
+                        styles.quickMailBtn,
+                        { backgroundColor: `${colors.secondary}1A` },
+                        pressed && Platform.OS === "ios" ? { opacity: 0.85 } : null,
                       ]}
                     >
-                      <Text
-                        style={[styles.contactName, { color: colors.foreground }]}
-                      >
-                        {c.name}
-                      </Text>
-                      {c.role ? (
-                        <Text
-                          style={[
-                            styles.contactRole,
-                            { color: colors.mutedForeground },
-                          ]}
-                        >
-                          {c.role}
-                        </Text>
-                      ) : null}
-                      {c.email ? (
-                        <Text
-                          style={[styles.contactEmail, { color: colors.secondary }]}
-                        >
-                          {c.email}
-                        </Text>
-                      ) : null}
+                      <Feather name="mail" size={20} color={colors.secondary} />
                     </Pressable>
-                    {c.email ? (
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`Quick email ${c.name}`}
-                        accessibilityHint="Opens your mail app with only the address filled in"
-                        onPress={() => void quickMailto(c)}
-                        hitSlop={8}
-                        android_ripple={
-                          Platform.OS === "android"
-                            ? { color: `${colors.secondary}33`, foreground: true }
-                            : undefined
-                        }
-                        style={({ pressed }) => [
-                          styles.quickMailBtn,
-                          { backgroundColor: `${colors.secondary}1A` },
-                          pressed && Platform.OS === "ios" ? { opacity: 0.85 } : null,
-                        ]}
-                      >
-                        <Feather name="mail" size={20} color={colors.secondary} />
-                      </Pressable>
-                    ) : null}
-                  </View>
-                ))}
-              </View>
+                  ) : null}
+                </View>
+              ))}
             </View>
-          );
-        })}
-      </ScrollView>
-
-      <ResourceContactModal
-        visible={selected !== null}
-        contact={selected}
-        onClose={() => setSelected(null)}
-      />
-    </>
+          </View>
+        );
+      })}
+    </ScrollView>
   );
 }
 
@@ -305,12 +271,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     textTransform: "uppercase",
     marginBottom: 4,
-  },
-  multiHint: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 12,
-    lineHeight: 16,
-    marginBottom: 10,
   },
   contactsWrap: {
     gap: 0,
