@@ -1,9 +1,10 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -23,8 +24,12 @@ import {
   type EquipmentSummary,
 } from "@/lib/api";
 
-const NUM_COLUMNS = 2;
+type ViewMode = "grid" | "list";
+
+const GRID_COLUMNS = 2;
 const GRID_GAP = 12;
+/** Remembered across launches so the choice sticks, like the theme setting. */
+const VIEW_MODE_KEY = "@fes/equipment-view-mode-v1";
 
 /**
  * The catalog is entirely driven by whatever pages currently exist under
@@ -35,6 +40,24 @@ const GRID_GAP = 12;
 export default function EquipmentInventoryScreen() {
   const colors = useColors();
   const [query, setQuery] = useState("");
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+
+  useEffect(() => {
+    AsyncStorage.getItem(VIEW_MODE_KEY)
+      .then((saved) => {
+        if (saved === "grid" || saved === "list") setViewMode(saved);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  const onChangeViewMode = (next: ViewMode) => {
+    if (next === viewMode) return;
+    if (Platform.OS !== "web") {
+      Haptics.selectionAsync().catch(() => undefined);
+    }
+    setViewMode(next);
+    AsyncStorage.setItem(VIEW_MODE_KEY, next).catch(() => undefined);
+  };
 
   const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: equipmentListQueryKey,
@@ -108,53 +131,63 @@ export default function EquipmentInventoryScreen() {
     );
   }
 
+  const isGrid = viewMode === "grid";
+
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <View
-        style={[
-          styles.searchWrap,
-          {
-            backgroundColor: colors.card,
-            borderColor: colors.border,
-            borderRadius: colors.radius,
-          },
-        ]}
-      >
-        <Feather name="search" size={16} color={colors.mutedForeground} />
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search equipment"
-          placeholderTextColor={colors.mutedForeground}
-          style={[styles.searchInput, { color: colors.foreground }]}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-        />
-        {query.length > 0 ? (
-          <Pressable
-            onPress={() => setQuery("")}
-            hitSlop={8}
-            accessibilityLabel="Clear search"
-          >
-            <Feather name="x" size={16} color={colors.mutedForeground} />
-          </Pressable>
-        ) : null}
+      <View style={styles.headerRow}>
+        <View
+          style={[
+            styles.searchWrap,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              borderRadius: colors.radius,
+            },
+          ]}
+        >
+          <Feather name="search" size={16} color={colors.mutedForeground} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search equipment"
+            placeholderTextColor={colors.mutedForeground}
+            style={[styles.searchInput, { color: colors.foreground }]}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+          />
+          {query.length > 0 ? (
+            <Pressable
+              onPress={() => setQuery("")}
+              hitSlop={8}
+              accessibilityLabel="Clear search"
+            >
+              <Feather name="x" size={16} color={colors.mutedForeground} />
+            </Pressable>
+          ) : null}
+        </View>
+
+        <ViewModeToggle mode={viewMode} onChange={onChangeViewMode} />
       </View>
 
       <FlatList
         data={filtered}
-        key={NUM_COLUMNS}
-        numColumns={NUM_COLUMNS}
+        // numColumns can't change on a mounted FlatList, so the key forces a
+        // remount when switching modes.
+        key={viewMode}
+        numColumns={isGrid ? GRID_COLUMNS : 1}
         keyExtractor={(item) => item.slug}
-        columnWrapperStyle={styles.row}
+        {...(isGrid ? { columnWrapperStyle: styles.gridRow } : {})}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.center}>
             <Feather name="package" size={28} color={colors.mutedForeground} />
             <Text style={[styles.dim, { color: colors.mutedForeground }]}>
-              {query ? `No equipment matches "${query.trim()}".` : "No equipment listed."}
+              {query
+                ? `No equipment matches "${query.trim()}".`
+                : "No equipment listed."}
             </Text>
           </View>
         }
@@ -165,15 +198,78 @@ export default function EquipmentInventoryScreen() {
             tintColor={colors.primary}
           />
         }
-        renderItem={({ item }) => (
-          <EquipmentCard item={item} onPress={() => onPressItem(item)} />
-        )}
+        renderItem={({ item }) =>
+          isGrid ? (
+            <EquipmentGridCard item={item} onPress={() => onPressItem(item)} />
+          ) : (
+            <EquipmentListRow item={item} onPress={() => onPressItem(item)} />
+          )
+        }
       />
     </View>
   );
 }
 
-function EquipmentCard({
+function ViewModeToggle({
+  mode,
+  onChange,
+}: {
+  mode: ViewMode;
+  onChange: (next: ViewMode) => void;
+}) {
+  const colors = useColors();
+
+  const segment = (target: ViewMode, icon: "grid" | "list", label: string) => {
+    const active = mode === target;
+    return (
+      <Pressable
+        onPress={() => onChange(target)}
+        accessibilityRole="button"
+        accessibilityState={{ selected: active }}
+        accessibilityLabel={label}
+        style={[
+          styles.segment,
+          active ? { backgroundColor: colors.primary } : null,
+        ]}
+      >
+        <Feather
+          name={icon}
+          size={16}
+          color={active ? colors.primaryForeground : colors.mutedForeground}
+        />
+      </Pressable>
+    );
+  };
+
+  return (
+    <View
+      style={[
+        styles.toggle,
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.border,
+          borderRadius: colors.radius,
+        },
+      ]}
+    >
+      {segment("grid", "grid", "Grid view")}
+      {segment("list", "list", "List view")}
+    </View>
+  );
+}
+
+/**
+ * The scraped image URL is often a dead link on the Center's own site (its
+ * media library has drifted out of sync with the page content) — a plain
+ * `imageUrl ? <Image> : placeholder` check doesn't catch that, since the URL
+ * is present, it just 404s. Falling back on load failure does.
+ */
+function useEquipmentImage(item: EquipmentSummary) {
+  const [failed, setFailed] = useState(false);
+  return { show: !!item.imageUrl && !failed, onError: () => setFailed(true) };
+}
+
+function EquipmentGridCard({
   item,
   onPress,
 }: {
@@ -181,12 +277,7 @@ function EquipmentCard({
   onPress: () => void;
 }) {
   const colors = useColors();
-  // The scraped image URL is often a dead link on the Center's own site (its
-  // media library has drifted out of sync with the page content) — a plain
-  // `imageUrl ? <Image> : placeholder` check doesn't catch that, since the
-  // URL is present, it just 404s. Falling back on load failure does.
-  const [imageFailed, setImageFailed] = useState(false);
-  const showImage = !!item.imageUrl && !imageFailed;
+  const image = useEquipmentImage(item);
 
   return (
     <Pressable
@@ -205,13 +296,13 @@ function EquipmentCard({
         },
       ]}
     >
-      {showImage ? (
+      {image.show ? (
         <Image
           source={{ uri: item.imageUrl! }}
           style={[styles.thumb, { backgroundColor: colors.muted }]}
           contentFit="contain"
           transition={150}
-          onError={() => setImageFailed(true)}
+          onError={image.onError}
         />
       ) : (
         <View
@@ -227,6 +318,63 @@ function EquipmentCard({
       <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={2}>
         {item.name}
       </Text>
+    </Pressable>
+  );
+}
+
+function EquipmentListRow({
+  item,
+  onPress,
+}: {
+  item: EquipmentSummary;
+  onPress: () => void;
+}) {
+  const colors = useColors();
+  const image = useEquipmentImage(item);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      android_ripple={{ color: colors.muted }}
+      accessibilityRole="button"
+      accessibilityLabel={item.name}
+      accessibilityHint="Opens this equipment's details"
+      style={({ pressed }) => [
+        styles.listRow,
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.border,
+          borderRadius: colors.radius,
+          opacity: pressed ? 0.88 : 1,
+        },
+      ]}
+    >
+      {image.show ? (
+        <Image
+          source={{ uri: item.imageUrl! }}
+          style={[styles.listThumb, { backgroundColor: colors.muted }]}
+          contentFit="contain"
+          transition={150}
+          onError={image.onError}
+        />
+      ) : (
+        <View
+          style={[
+            styles.listThumb,
+            styles.thumbPlaceholder,
+            { backgroundColor: `${colors.secondary}18` },
+          ]}
+        >
+          <Feather name="package" size={22} color={colors.secondary} />
+        </View>
+      )}
+      <Text
+        style={[styles.listName, { color: colors.foreground }]}
+        numberOfLines={2}
+      >
+        {item.name}
+      </Text>
+      <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
     </Pressable>
   );
 }
@@ -256,10 +404,17 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   retryText: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
-  searchWrap: {
+
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     marginHorizontal: 16,
     marginTop: 12,
     marginBottom: 4,
+  },
+  searchWrap: {
+    flex: 1,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderWidth: 1,
@@ -273,13 +428,27 @@ const styles = StyleSheet.create({
     fontSize: 15,
     padding: 0,
   },
+  toggle: {
+    flexDirection: "row",
+    borderWidth: 1,
+    padding: 2,
+    gap: 2,
+  },
+  segment: {
+    width: 36,
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 7,
+  },
+
   listContent: {
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 32,
     flexGrow: 1,
   },
-  row: {
+  gridRow: {
     gap: GRID_GAP,
   },
   card: {
@@ -302,5 +471,25 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
     fontSize: 13.5,
     lineHeight: 18,
+  },
+
+  listRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    padding: 10,
+    marginBottom: 10,
+  },
+  listThumb: {
+    width: 52,
+    height: 52,
+    borderRadius: 8,
+  },
+  listName: {
+    flex: 1,
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 15,
+    lineHeight: 20,
   },
 });
