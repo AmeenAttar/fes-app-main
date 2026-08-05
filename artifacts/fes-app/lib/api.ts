@@ -333,11 +333,11 @@ export async function fetchWeather(): Promise<WeatherResponse> {
 }
 
 /** Bump when `/api/supporting-resources` payload shape changes. */
-export const SUPPORTING_RESOURCES_SHEET_QUERY_VERSION = 1 as const;
+export const SUPPORTING_RESOURCES_QUERY_VERSION = 2 as const;
 
-export const supportingResourcesSheetQueryKey = [
+export const supportingResourcesQueryKey = [
   "supporting-resources",
-  SUPPORTING_RESOURCES_SHEET_QUERY_VERSION,
+  SUPPORTING_RESOURCES_QUERY_VERSION,
 ] as const;
 
 const sheetsFetchInit: RequestInit = {
@@ -348,9 +348,7 @@ const sheetsFetchInit: RequestInit = {
   },
 };
 
-export async function fetchSupportingResourcesSheet(): Promise<
-  ResourceCategory[]
-> {
+export async function fetchSupportingResources(): Promise<ResourceCategory[]> {
   const res = await fetch(
     `${API_BASE_URL}/api/supporting-resources`,
     sheetsFetchInit,

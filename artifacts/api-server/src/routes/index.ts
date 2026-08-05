@@ -6,7 +6,7 @@ import newsRouter from "./news";
 import { pushRouter } from "./push";
 import weatherRouter from "./weather";
 import equipmentRouter from "./equipment";
-import supportingResourcesSheetRouter from "./supporting-resources-sheet";
+import supportingResourcesRouter from "./supporting-resources";
 
 const router: IRouter = Router();
 
@@ -17,6 +17,6 @@ router.use(newsRouter);
 router.use(pushRouter);
 router.use(weatherRouter);
 router.use(equipmentRouter);
-router.use(supportingResourcesSheetRouter);
+router.use(supportingResourcesRouter);
 
 export default router;

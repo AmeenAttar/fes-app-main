@@ -17,8 +17,8 @@ import { ResourceContactModal } from "@/components/ResourceContactModal";
 import { type ResourceContact } from "@/constants/supporting-resources";
 import { useColors } from "@/hooks/useColors";
 import {
-  fetchSupportingResourcesSheet,
-  supportingResourcesSheetQueryKey,
+  fetchSupportingResources,
+  supportingResourcesQueryKey,
 } from "@/lib/api";
 import { openMailtoDraft } from "@/lib/mailto";
 
@@ -27,8 +27,8 @@ export default function SupportingResourcesScreen() {
   const [selected, setSelected] = useState<ResourceContact | null>(null);
 
   const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
-    queryKey: supportingResourcesSheetQueryKey,
-    queryFn: fetchSupportingResourcesSheet,
+    queryKey: supportingResourcesQueryKey,
+    queryFn: fetchSupportingResources,
     staleTime: 10 * 60 * 1000,
   });
 
@@ -125,13 +125,12 @@ export default function SupportingResourcesScreen() {
           <View style={styles.emptyWrap}>
             <Feather name="inbox" size={28} color={colors.mutedForeground} />
             <Text style={[styles.errTitle, { color: colors.foreground }]}>
-              No contacts in sheet
+              No contacts listed
             </Text>
             <Text
               style={[styles.centerHint, { color: colors.mutedForeground }]}
             >
-              Add rows to the “Supporting Resources” tab (Category, Name,
-              Email).
+              Nothing is published on the Supporting Resources page yet.
             </Text>
           </View>
         ) : null}
@@ -180,6 +179,8 @@ export default function SupportingResourcesScreen() {
                       accessibilityLabel={`Message ${c.name}`}
                       accessibilityHint="Opens a form, then your mail app with a draft"
                       onPress={() => setSelected(c)}
+                      // Nothing to send to when the page lists a name only.
+                      disabled={!c.email}
                       android_ripple={
                         Platform.OS === "android"
                           ? { color: `${colors.primary}22` }
@@ -195,31 +196,45 @@ export default function SupportingResourcesScreen() {
                       >
                         {c.name}
                       </Text>
-                      <Text
-                        style={[styles.contactEmail, { color: colors.secondary }]}
+                      {c.role ? (
+                        <Text
+                          style={[
+                            styles.contactRole,
+                            { color: colors.mutedForeground },
+                          ]}
+                        >
+                          {c.role}
+                        </Text>
+                      ) : null}
+                      {c.email ? (
+                        <Text
+                          style={[styles.contactEmail, { color: colors.secondary }]}
+                        >
+                          {c.email}
+                        </Text>
+                      ) : null}
+                    </Pressable>
+                    {c.email ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Quick email ${c.name}`}
+                        accessibilityHint="Opens your mail app with only the address filled in"
+                        onPress={() => void quickMailto(c)}
+                        hitSlop={8}
+                        android_ripple={
+                          Platform.OS === "android"
+                            ? { color: `${colors.secondary}33`, foreground: true }
+                            : undefined
+                        }
+                        style={({ pressed }) => [
+                          styles.quickMailBtn,
+                          { backgroundColor: `${colors.secondary}1A` },
+                          pressed && Platform.OS === "ios" ? { opacity: 0.85 } : null,
+                        ]}
                       >
-                        {c.email}
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Quick email ${c.name}`}
-                      accessibilityHint="Opens your mail app with only the address filled in"
-                      onPress={() => void quickMailto(c)}
-                      hitSlop={8}
-                      android_ripple={
-                        Platform.OS === "android"
-                          ? { color: `${colors.secondary}33`, foreground: true }
-                          : undefined
-                      }
-                      style={({ pressed }) => [
-                        styles.quickMailBtn,
-                        { backgroundColor: `${colors.secondary}1A` },
-                        pressed && Platform.OS === "ios" ? { opacity: 0.85 } : null,
-                      ]}
-                    >
-                      <Feather name="mail" size={20} color={colors.secondary} />
-                    </Pressable>
+                        <Feather name="mail" size={20} color={colors.secondary} />
+                      </Pressable>
+                    ) : null}
                   </View>
                 ))}
               </View>
@@ -321,6 +336,12 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
     fontSize: 15,
     lineHeight: 20,
+  },
+  contactRole: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12.5,
+    lineHeight: 17,
+    marginTop: 2,
   },
   contactEmail: {
     fontFamily: "Inter_400Regular",
