@@ -28,6 +28,7 @@ import { StaleNotice } from "@/components/StaleNotice";
 import { useZoomTransition } from "@/components/ZoomTransition";
 import { PROJECT_REVIEW_CONTACT } from "@/constants/supporting-resources";
 import { useColors } from "@/hooks/useColors";
+import { openMailtoDraft } from "@/lib/mailto";
 import { FESCENTER_SITE_HOSTNAME, FESCENTER_SITE_ORIGIN } from "@/lib/site";
 import type { IconName } from "@/constants/menu";
 import {
@@ -96,11 +97,15 @@ export default function MenuScreen() {
   const upcoming = (eventsQuery.data?.events ?? []).slice(0, 6);
   const eventsStale = eventsQuery.data?.stale === true;
 
-  const onPressContact = () => {
+  const onPressContact = async () => {
     haptic();
-    Linking.openURL(`mailto:${PROJECT_REVIEW_CONTACT.email}`).catch(
-      () => undefined,
-    );
+    const ok = await openMailtoDraft({ to: PROJECT_REVIEW_CONTACT.email });
+    if (!ok) {
+      Alert.alert(
+        "Mail unavailable",
+        `Couldn't open your mail app. Add an email account, or email ${PROJECT_REVIEW_CONTACT.name} directly at ${PROJECT_REVIEW_CONTACT.email}.`,
+      );
+    }
   };
 
   const openWebsite = async () => {

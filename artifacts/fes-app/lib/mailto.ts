@@ -14,11 +14,9 @@ export async function openMailtoDraft(params: {
   if (body) qs.push(`body=${q(body)}`);
   if (qs.length > 0) href += `?${qs.join("&")}`;
   try {
-    const can = await Linking.canOpenURL(href);
-    if (can) {
-      await Linking.openURL(href);
-      return true;
-    }
+    // canOpenURL is unreliable for mailto specifically (false positives/negatives
+    // across iOS versions), so openURL itself — which rejects when nothing can
+    // handle the link — is the real signal, not a redundant second call.
     await Linking.openURL(href);
     return true;
   } catch {

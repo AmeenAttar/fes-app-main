@@ -5,7 +5,7 @@ import { router } from "expo-router";
 import React from "react";
 import {
   ActivityIndicator,
-  Linking,
+  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -22,6 +22,7 @@ import {
   fetchEvents,
   type CalendarEvent,
 } from "@/lib/api";
+import { openMailtoDraft } from "@/lib/mailto";
 
 /**
  * Signing up is what the calendar entry itself specifies — nominating a speaker
@@ -82,13 +83,19 @@ export default function TuesdaysScreen() {
   const stale = data?.stale === true;
   const next = sessions[0];
 
-  const openSignUp = () => {
+  const openSignUp = async () => {
     if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => undefined);
-    const url =
-      `mailto:${FIRST_TUESDAY_CONTACT.email}` +
-      `?subject=${encodeURIComponent(SIGN_UP_SUBJECT)}` +
-      `&body=${encodeURIComponent(signUpBody())}`;
-    Linking.openURL(url).catch(() => undefined);
+    const ok = await openMailtoDraft({
+      to: FIRST_TUESDAY_CONTACT.email,
+      subject: SIGN_UP_SUBJECT,
+      body: signUpBody(),
+    });
+    if (!ok) {
+      Alert.alert(
+        "Mail unavailable",
+        `Couldn't open your mail app. Add an email account, or email ${FIRST_TUESDAY_CONTACT.name} directly at ${FIRST_TUESDAY_CONTACT.email}.`,
+      );
+    }
   };
 
   return (
