@@ -117,8 +117,12 @@ function RootLayoutNav() {
         options={{ title: "Supporting Resources" }}
       />
       <Stack.Screen
-        name="equipment-inventory"
+        name="equipment-inventory/index"
         options={{ title: "Equipment Inventory" }}
+      />
+      <Stack.Screen
+        name="equipment-inventory/[slug]"
+        options={{ title: "" }}
       />
       <Stack.Screen name="tuesdays" options={{ title: "Tuesdays" }} />
       <Stack.Screen name="settings" options={{ title: "Settings" }} />

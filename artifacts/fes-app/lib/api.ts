@@ -369,27 +369,75 @@ export async function fetchSupportingResourcesSheet(): Promise<
   return Array.isArray(json.categories) ? json.categories : [];
 }
 
-/** Bump when `/api/inventory` payload shape changes. */
-export const INVENTORY_QUERY_VERSION = 1 as const;
+/** Bump when `/api/equipment` payload shape changes. */
+export const EQUIPMENT_QUERY_VERSION = 1 as const;
 
-export const inventoryQueryKey = ["inventory", INVENTORY_QUERY_VERSION] as const;
+export const equipmentListQueryKey = [
+  "equipment",
+  "list",
+  EQUIPMENT_QUERY_VERSION,
+] as const;
 
-export interface InventoryPayload {
-  headers: string[];
-  items: Record<string, string>[];
+export function equipmentDetailQueryKey(slug: string) {
+  return ["equipment", "detail", EQUIPMENT_QUERY_VERSION, slug] as const;
 }
 
-export async function fetchInventory(): Promise<InventoryPayload> {
-  const res = await fetch(`${API_BASE_URL}/api/inventory`, sheetsFetchInit);
-  if (!res.ok) {
-    let detail = `Failed to load inventory (${res.status})`;
-    try {
-      const body = (await res.json()) as { message?: unknown };
-      if (typeof body.message === "string" && body.message) detail = body.message;
-    } catch {
-      /* non-JSON */
-    }
-    throw new Error(detail);
+export interface EquipmentParameter {
+  label: string;
+  value: string;
+}
+
+export interface EquipmentSummary {
+  slug: string;
+  name: string;
+  imageUrl: string | null;
+}
+
+export interface EquipmentDetail extends EquipmentSummary {
+  detailUrl: string;
+  /** Whatever fields the source page has — not a fixed schema. */
+  parameters: EquipmentParameter[];
+}
+
+async function equipmentErrorMessage(
+  res: globalThis.Response,
+  fallback: string,
+): Promise<string> {
+  try {
+    const body = (await res.json()) as { message?: unknown };
+    if (typeof body.message === "string" && body.message) return body.message;
+  } catch {
+    /* non-JSON error body */
   }
-  return (await res.json()) as InventoryPayload;
+  return fallback;
+}
+
+export async function fetchEquipmentList(): Promise<EquipmentSummary[]> {
+  const res = await fetch(`${API_BASE_URL}/api/equipment`, sheetsFetchInit);
+  if (!res.ok) {
+    throw new Error(
+      await equipmentErrorMessage(res, `Failed to load equipment (${res.status})`),
+    );
+  }
+  const json = (await res.json()) as { items?: EquipmentSummary[] };
+  return Array.isArray(json.items) ? json.items : [];
+}
+
+export async function fetchEquipmentDetail(
+  slug: string,
+): Promise<EquipmentDetail> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/equipment/${encodeURIComponent(slug)}`,
+    sheetsFetchInit,
+  );
+  if (res.status === 404) {
+    throw new Error("Equipment not found");
+  }
+  if (!res.ok) {
+    throw new Error(
+      await equipmentErrorMessage(res, `Failed to load equipment (${res.status})`),
+    );
+  }
+  const json = (await res.json()) as { equipment: EquipmentDetail };
+  return json.equipment;
 }

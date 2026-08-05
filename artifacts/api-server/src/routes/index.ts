@@ -5,7 +5,7 @@ import { eventsRouter } from "./events";
 import newsRouter from "./news";
 import { pushRouter } from "./push";
 import weatherRouter from "./weather";
-import inventoryRouter from "./inventory";
+import equipmentRouter from "./equipment";
 import supportingResourcesSheetRouter from "./supporting-resources-sheet";
 
 const router: IRouter = Router();
@@ -16,7 +16,7 @@ router.use(eventsRouter);
 router.use(newsRouter);
 router.use(pushRouter);
 router.use(weatherRouter);
-router.use(inventoryRouter);
+router.use(equipmentRouter);
 router.use(supportingResourcesSheetRouter);
 
 export default router;

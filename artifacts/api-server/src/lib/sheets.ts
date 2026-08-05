@@ -21,14 +21,6 @@ export function getMasterSpreadsheetId(): string {
   return id && id.length > 0 ? id : DEFAULT_SPREADSHEET_ID;
 }
 
-export function getInventoryTabName(): string {
-  return (
-    process.env["INVENTORY_SHEET_NAME"]?.trim() ||
-    process.env["INVENTORY_TAB_NAME"]?.trim() ||
-    "Equipment"
-  );
-}
-
 export function getSupportingResourcesTabName(): string {
   return (
     process.env["SUPPORTING_RESOURCES_SHEET_NAME"]?.trim() ||
