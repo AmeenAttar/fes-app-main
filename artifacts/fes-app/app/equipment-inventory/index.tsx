@@ -1,10 +1,9 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -17,6 +16,10 @@ import {
   View,
 } from "react-native";
 
+import {
+  useViewMode,
+  ViewModeToggle,
+} from "@/components/ViewModeToggle";
 import { useColors } from "@/hooks/useColors";
 import {
   equipmentListQueryKey,
@@ -24,11 +27,8 @@ import {
   type EquipmentSummary,
 } from "@/lib/api";
 
-type ViewMode = "grid" | "list";
-
 const GRID_COLUMNS = 2;
 const GRID_GAP = 12;
-/** Remembered across launches so the choice sticks, like the theme setting. */
 const VIEW_MODE_KEY = "@fes/equipment-view-mode-v1";
 
 /**
@@ -40,24 +40,7 @@ const VIEW_MODE_KEY = "@fes/equipment-view-mode-v1";
 export default function EquipmentInventoryScreen() {
   const colors = useColors();
   const [query, setQuery] = useState("");
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
-
-  useEffect(() => {
-    AsyncStorage.getItem(VIEW_MODE_KEY)
-      .then((saved) => {
-        if (saved === "grid" || saved === "list") setViewMode(saved);
-      })
-      .catch(() => undefined);
-  }, []);
-
-  const onChangeViewMode = (next: ViewMode) => {
-    if (next === viewMode) return;
-    if (Platform.OS !== "web") {
-      Haptics.selectionAsync().catch(() => undefined);
-    }
-    setViewMode(next);
-    AsyncStorage.setItem(VIEW_MODE_KEY, next).catch(() => undefined);
-  };
+  const [viewMode, onChangeViewMode] = useViewMode(VIEW_MODE_KEY);
 
   const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: equipmentListQueryKey,
@@ -206,54 +189,6 @@ export default function EquipmentInventoryScreen() {
           )
         }
       />
-    </View>
-  );
-}
-
-function ViewModeToggle({
-  mode,
-  onChange,
-}: {
-  mode: ViewMode;
-  onChange: (next: ViewMode) => void;
-}) {
-  const colors = useColors();
-
-  const segment = (target: ViewMode, icon: "grid" | "list", label: string) => {
-    const active = mode === target;
-    return (
-      <Pressable
-        onPress={() => onChange(target)}
-        accessibilityRole="button"
-        accessibilityState={{ selected: active }}
-        accessibilityLabel={label}
-        style={[
-          styles.segment,
-          active ? { backgroundColor: colors.primary } : null,
-        ]}
-      >
-        <Feather
-          name={icon}
-          size={16}
-          color={active ? colors.primaryForeground : colors.mutedForeground}
-        />
-      </Pressable>
-    );
-  };
-
-  return (
-    <View
-      style={[
-        styles.toggle,
-        {
-          backgroundColor: colors.card,
-          borderColor: colors.border,
-          borderRadius: colors.radius,
-        },
-      ]}
-    >
-      {segment("grid", "grid", "Grid view")}
-      {segment("list", "list", "List view")}
     </View>
   );
 }
@@ -427,19 +362,6 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     fontSize: 15,
     padding: 0,
-  },
-  toggle: {
-    flexDirection: "row",
-    borderWidth: 1,
-    padding: 2,
-    gap: 2,
-  },
-  segment: {
-    width: 36,
-    height: 34,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 7,
   },
 
   listContent: {
