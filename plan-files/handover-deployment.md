@@ -75,7 +75,13 @@ Add two repository secrets (Settings → Secrets and variables → Actions):
 
 Then run the workflow once by hand (Actions → Notification scheduler → Run
 workflow) rather than waiting 10 minutes to find out whether it works. A
-successful run prints `{"events":"ran","news":"ran","durationMs":...}`.
+successful run prints `{"events":"ok","news":"ok","durationMs":...}`.
+
+Each job reports `ok`, `failed`, or `skipped` (skipped meaning a previous run of
+that job was still going). If either says `failed` the endpoint returns **500**,
+so the workflow goes red and GitHub emails you. That is deliberate: the jobs
+catch their own errors so one cannot abort the other, and without the 500 a run
+where both threw would look exactly like a healthy one.
 
 **4. Mobile app**
 

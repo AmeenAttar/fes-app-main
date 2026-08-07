@@ -93,9 +93,11 @@ async function processOnce(): Promise<void> {
   try {
     events = await loadEvents();
   } catch (err) {
+    // Rethrow rather than returning: swallowing here would report a calendar
+    // outage as a clean run all the way up to the cron's exit status.
+    // `runEventsTick` logs the generic failure and captures it once.
     logger.error({ err }, "Scheduler: failed to load events");
-    captureError(err, { job: "event-reminders" });
-    return;
+    throw err;
   }
 
   const tokens = await db.select().from(pushTokensTable);
@@ -192,33 +194,41 @@ let newsTimer: NodeJS.Timeout | null = null;
 let eventsRunning = false;
 let newsRunning = false;
 
-/** @returns false when skipped because the previous run is still going. */
-async function runEventsTick(): Promise<boolean> {
-  if (eventsRunning) return false;
+/**
+ * Outcome of one job pass.
+ *
+ * `failed` exists so a caller can tell a working run from a broken one. The
+ * errors are still swallowed here — one job must not abort the other, and a
+ * timer has nobody to throw to — but swallowing them *without reporting* is how
+ * a scheduler ends up looking healthy for months while delivering nothing.
+ */
+export type JobResult = "ok" | "failed" | "skipped";
+
+async function runEventsTick(): Promise<JobResult> {
+  if (eventsRunning) return "skipped";
   eventsRunning = true;
   try {
     await processOnce();
-    return true;
+    return "ok";
   } catch (err) {
     logger.error({ err }, "Scheduler tick failed");
     captureError(err, { job: "event-reminders" });
-    return true;
+    return "failed";
   } finally {
     eventsRunning = false;
   }
 }
 
-/** @returns false when skipped because the previous run is still going. */
-async function runNewsTick(): Promise<boolean> {
-  if (newsRunning) return false;
+async function runNewsTick(): Promise<JobResult> {
+  if (newsRunning) return "skipped";
   newsRunning = true;
   try {
     await processNewsPushOnce();
-    return true;
+    return "ok";
   } catch (err) {
     logger.error({ err }, "News push tick failed");
     captureError(err, { job: "news-push" });
-    return true;
+    return "failed";
   } finally {
     newsRunning = false;
   }
@@ -238,14 +248,11 @@ async function runNewsTick(): Promise<boolean> {
  * so a doubled run repeats work rather than re-notifying anyone.
  */
 export async function runSchedulerOnce(): Promise<{
-  events: "ran" | "skipped";
-  news: "ran" | "skipped";
+  events: JobResult;
+  news: JobResult;
 }> {
   const [events, news] = await Promise.all([runEventsTick(), runNewsTick()]);
-  return {
-    events: events ? "ran" : "skipped",
-    news: news ? "ran" : "skipped",
-  };
+  return { events, news };
 }
 
 /** Stops both timers so the process can exit cleanly. */
