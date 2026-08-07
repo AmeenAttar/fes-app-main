@@ -21,14 +21,29 @@ export async function isPushEnabled(): Promise<boolean> {
  * Records the preference and syncs the server: turning it off deletes the token
  * so this device drops out of the fan-out entirely, rather than the app quietly
  * discarding notifications it still receives.
+ *
+ * Returns the outcome rather than throwing on failure, because
+ * `registerForPushNotifications` doesn't throw either — a denied permission or
+ * a rejected token comes back as a status. Callers that ignore the return value
+ * will show a switch that says "on" while nothing is registered.
  */
-export async function setPushEnabled(enabled: boolean): Promise<void> {
+export async function setPushEnabled(
+  enabled: boolean,
+): Promise<PushToggleResult> {
   await AsyncStorage.setItem(PUSH_ENABLED_KEY, enabled ? "true" : "false");
-  if (enabled) {
-    await registerForPushNotifications();
-    return;
+
+  if (!enabled) {
+    await unregisterPushNotifications();
+    return { ok: true };
   }
-  await unregisterPushNotifications();
+
+  const result = await registerForPushNotifications();
+  if (result.status === "granted") return { ok: true };
+
+  // Leave the stored preference off so the next launch doesn't re-attempt and
+  // fail the same way without anyone noticing.
+  await AsyncStorage.setItem(PUSH_ENABLED_KEY, "false");
+  return { ok: false, status: result.status, message: result.message };
 }
 
 /** Removes this device's token from the server and clears the local cache. */
@@ -76,9 +91,23 @@ async function ensureAndroidChannel(): Promise<void> {
   });
 }
 
-interface RegistrationResult {
+export type RegistrationStatus =
+  | "granted"
+  | "denied"
+  | "unsupported"
+  | "no-project-id"
+  | "error";
+
+export interface RegistrationResult {
   token: string | null;
-  status: "granted" | "denied" | "unsupported" | "no-project-id" | "error";
+  status: RegistrationStatus;
+  message?: string;
+}
+
+/** Outcome of {@link setPushEnabled}, for callers that show the user something. */
+export interface PushToggleResult {
+  ok: boolean;
+  status?: RegistrationStatus;
   message?: string;
 }
 

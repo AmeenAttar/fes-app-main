@@ -147,10 +147,26 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
-  // Fire-and-forget push registration after first render. Errors are intentionally
-  // swallowed here; the user-facing toggle in Settings (future) can show details.
+  /**
+   * Fire-and-forget push registration after first render. Nothing is shown to
+   * the user — Settings owns that — but the outcome is logged, because
+   * `registerForPushNotifications` reports failure by *returning* a status
+   * rather than throwing. Discarding it made a rejected token
+   * indistinguishable from a working one: no error, no UI, and `push_tokens`
+   * simply stays empty.
+   */
   useEffect(() => {
-    registerForPushNotifications().catch(() => undefined);
+    registerForPushNotifications()
+      .then((result) => {
+        if (result.status === "granted") return;
+        console.warn(
+          `[push] registration incomplete: ${result.status}`,
+          result.message ?? "",
+        );
+      })
+      .catch((err: unknown) => {
+        console.warn("[push] registration threw", err);
+      });
   }, []);
 
   useEffect(() => {
