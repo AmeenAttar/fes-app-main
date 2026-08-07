@@ -3,6 +3,7 @@ import Constants from "expo-constants";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Platform,
   ScrollView,
   StyleSheet,
@@ -14,7 +15,30 @@ import {
 import { useTheme } from "@/contexts/ThemeContext";
 import { useColors } from "@/hooks/useColors";
 import { FESCENTER_SITE_HOSTNAME } from "@/lib/site";
-import { isPushEnabled, setPushEnabled } from "@/lib/push";
+import {
+  isPushEnabled,
+  setPushEnabled,
+  type PushToggleResult,
+} from "@/lib/push";
+
+/** Plain-language reason the switch bounced back, with the fix where there is one. */
+function pushFailureMessage(result: PushToggleResult): string {
+  switch (result.status) {
+    case "denied":
+      return Platform.OS === "ios"
+        ? "Notifications are turned off for this app. Enable them in Settings › Notifications › Cleveland FES Center."
+        : "Notifications are turned off for this app. Enable them in your device settings.";
+    case "unsupported":
+      return "Notifications need a real device — they don't work in Expo Go or a simulator.";
+    case "no-project-id":
+    case "error":
+    default:
+      return (
+        result.message ??
+        "This device couldn't be registered for notifications. Please try again."
+      );
+  }
+}
 
 export default function SettingsScreen() {
   const colors = useColors();
@@ -32,7 +56,14 @@ export default function SettingsScreen() {
     setBusy(true);
     setPushOn(next); // Optimistic — the switch should not lag the tap.
     try {
-      await setPushEnabled(next);
+      const result = await setPushEnabled(next);
+      // Failure comes back as a result, not a throw. Without this the switch
+      // stays on while nothing is registered, and the first sign of trouble is
+      // notifications that never arrive.
+      if (!result.ok) {
+        setPushOn(false);
+        Alert.alert("Notifications not enabled", pushFailureMessage(result));
+      }
     } catch {
       setPushOn(!next);
     } finally {
