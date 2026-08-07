@@ -20,19 +20,42 @@ const LEDGER_RETENTION_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
 const PRUNE_EVERY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Reminder windows. We send each kind exactly once per occurrence.
- * The window is checked against `event.start - now`, in minutes.
+ * How the short-notice reminder describes the time left.
+ *
+ * The reminder no longer promises a fixed lead time, because the schedule is
+ * driven by an external cron that skips ticks. Saying what is actually true at
+ * send time is what lets the window be wide enough to survive those gaps.
+ */
+export function formatLeadTime(minutesUntil: number): string {
+  const m = Math.round(minutesUntil);
+  if (m >= 50) return "in 1 hour";
+  if (m >= 2) return `in ${m} minutes`;
+  return "now";
+}
+
+/**
+ * Reminder windows. We send each kind exactly once per occurrence — the unique
+ * index on `sent_notifications` is what enforces that, not the window.
+ *
+ * The window is checked against `event.start - now`, in minutes, and exists
+ * only to bound how early a reminder may go out. It is deliberately *not* sized
+ * to the poll interval: an external cron drops ticks, and a window narrower
+ * than the longest gap silently loses reminders rather than delaying them.
+ * Widening costs nothing because the ledger already prevents repeats.
  */
 const REMINDERS: Array<{
   kind: "day_before" | "hour_before";
   /** Trigger when minutes-until-event is between [minMinutes, maxMinutes]. */
   minMinutes: number;
   maxMinutes: number;
-  buildBody: (event: EventDto) => { title: string; body: string };
+  buildBody: (
+    event: EventDto,
+    minutesUntil: number,
+  ) => { title: string; body: string };
 }> = [
   {
     kind: "day_before",
-    // 18 to 30 hours out — one daily check ensures we hit it once.
+    // 18 to 30 hours out — twelve hours wide, so no realistic gap misses it.
     minMinutes: 18 * 60,
     maxMinutes: 30 * 60,
     buildBody: (e) => ({
@@ -42,11 +65,13 @@ const REMINDERS: Array<{
   },
   {
     kind: "hour_before",
-    // 50 to 75 minutes out — covers any 5-minute poll within that window.
-    minMinutes: 50,
+    // Anything from 75 minutes out until the event starts. A skipped tick now
+    // delays this reminder instead of losing it, and the title says how long is
+    // actually left rather than claiming an hour.
+    minMinutes: 0,
     maxMinutes: 75,
-    buildBody: (e) => ({
-      title: "Starting in 1 hour",
+    buildBody: (e, minutesUntil) => ({
+      title: `Starting ${formatLeadTime(minutesUntil)}`,
       body: `${e.title}${formatTimeSuffix(e)}`,
     }),
   },
@@ -111,6 +136,7 @@ async function processOnce(): Promise<void> {
     event: EventDto;
     reminder: (typeof REMINDERS)[number];
     occurrenceStart: Date;
+    minutesUntil: number;
   }> = [];
 
   for (const event of events) {
@@ -120,13 +146,24 @@ async function processOnce(): Promise<void> {
     if (minutesUntil <= 0) continue;
 
     for (const reminder of REMINDERS) {
+      // An all-day event has no start time — `eventStartMs` puts it at local
+      // midnight — so a short-notice reminder would count down to midnight and
+      // say "Starting now" as the day turns over. The day-before reminder is
+      // the one that means anything for these.
+      if (reminder.kind === "hour_before" && event.allDay) continue;
+
       if (
         minutesUntil < reminder.minMinutes ||
         minutesUntil > reminder.maxMinutes
       ) {
         continue;
       }
-      due.push({ event, reminder, occurrenceStart: new Date(event.start) });
+      due.push({
+        event,
+        reminder,
+        occurrenceStart: new Date(event.start),
+        minutesUntil,
+      });
     }
   }
 
@@ -149,11 +186,11 @@ async function processOnce(): Promise<void> {
     alreadySent.map((r) => ledgerKey(r.eventUid, r.occurrenceStart, r.kind)),
   );
 
-  for (const { event, reminder, occurrenceStart } of due) {
+  for (const { event, reminder, occurrenceStart, minutesUntil } of due) {
     const key = ledgerKey(event.uid, occurrenceStart, reminder.kind);
     if (sentKeys.has(key)) continue;
 
-    const { title, body } = reminder.buildBody(event);
+    const { title, body } = reminder.buildBody(event, minutesUntil);
 
     logger.info(
       { kind: reminder.kind, event: event.title },

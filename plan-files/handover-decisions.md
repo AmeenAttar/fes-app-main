@@ -115,6 +115,32 @@ is safe but duplicates work.
 The original rationale still holds for anything self-hosted or always-on — this
 is an added mode, not a replacement, and no queue or worker was introduced.
 
+**The reminder windows were resized as a consequence, and this is the part worth
+understanding before touching `REMINDERS`.** They were originally sized to the
+5-minute in-process poll: `hour_before` fired between 50 and 75 minutes out, a
+25-minute window that any 5-minute timer was certain to land in. An external
+cron is not certain. GitHub delivers scheduled workflows on a best-effort basis
+and observably skips ticks — gaps past 20 minutes were seen on day one — so an
+event could pass clean through a 25-minute window and the reminder would never
+send, with nothing logged.
+
+`hour_before` now covers 0 to 75 minutes out and the title reports the real time
+remaining (`formatLeadTime`), so a skipped tick *delays* the reminder instead of
+losing it. This is only safe because the `sent_notifications` unique index, not
+the window, is what guarantees once-per-occurrence — widening the window costs
+nothing as long as that stays true.
+
+Two consequences to keep in mind:
+
+- A reminder may now read "Starting in 12 minutes" rather than "in 1 hour". That
+  is the honest thing to say and the reason the copy is computed, not fixed.
+- All-day events are excluded from `hour_before` entirely. They sit at local
+  midnight, so a countdown would announce "Starting now" as the date rolled
+  over. `day_before` is the only meaningful reminder for them.
+
+**If you narrow these windows again, narrow them to the worst gap you are
+willing to tolerate from your trigger, not to its nominal interval.**
+
 **Do not change without reviewing:** If the server is scaled to multiple instances (e.g. multiple Replit replicas), each instance runs its own scheduler. The `sent_notifications` unique index prevents duplicate sends but does not prevent duplicate DB reads/writes. For more than 2 instances, move to a dedicated scheduler process.
 
 ---
