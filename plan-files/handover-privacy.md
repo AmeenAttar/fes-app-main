@@ -39,6 +39,50 @@ Deliberately **not** collected:
 
 ---
 
+## State of the published policy
+
+Checked 2026-08-07 against `https://fescenter.org/privacy-policy-2/`:
+
+- It already has an **"FES Center App"** section — written for this app.
+- It is **effective 2020-08-17** and has not been touched since.
+- It covers log data, cookies, service providers, security, and children's
+  privacy.
+- It says **nothing** about push notifications, device tokens, or device
+  identifiers of any kind.
+
+That last point is the gap. The App Privacy questionnaire below declares a
+Device ID, and a policy that does not mention one contradicts it.
+
+---
+
+## Message to send
+
+Whoever maintains the website needs to paste one paragraph. Per the app's own
+Supporting Resources page, Communications / Media Relations is **Mary Buckett**
+(`mbuckett@FEScenter.org`) with **Erika Woodrum** (`ewoodrum@FEScenter.org`).
+
+> Subject: One paragraph to add to the privacy policy before the app ships
+>
+> Hi — we're submitting the Cleveland FES Center iOS app to the App Store, and
+> Apple requires the privacy policy to describe anything the app stores about a
+> device.
+>
+> The page at fescenter.org/privacy-policy-2/ already has an "FES Center App"
+> section, but it predates notifications (it's dated August 2020) and doesn't
+> mention them. Apple rejects submissions where the policy and the declared data
+> don't match.
+>
+> Could you add the paragraph below to that page, under the existing app
+> section? Nothing else needs to change.
+>
+> [paste the block from the next section]
+>
+> For context, the only thing the app stores is an anonymous token identifying a
+> device so we can send event reminders. No names, no email addresses, no
+> location, no analytics.
+
+---
+
 ## Paragraph to add to the privacy policy
 
 Send this to whoever maintains `fescenter.org`. It belongs in

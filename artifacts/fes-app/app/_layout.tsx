@@ -43,8 +43,22 @@ const queryClient = new QueryClient({
       // and refetches behind it instead of showing an error on a bad connection.
       gcTime: CACHE_MAX_AGE_MS,
       staleTime: 5 * 60 * 1000,
-      retry: 2,
-      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+      /**
+       * Tuned for a free-tier API that sleeps, not for a flaky network.
+       *
+       * Render suspends the service after ~15 idle minutes and takes 30–60
+       * seconds to wake — a measured cold start here was 76s. The previous
+       * 1s/2s backoff burned all three attempts inside about three seconds, so
+       * a first-open against a sleeping server showed "Couldn't load news"
+       * while the server was still starting up perfectly normally.
+       *
+       * Spreading four attempts across ~30s covers a typical wake. An external
+       * cron is supposed to keep the service warm so this never triggers, but
+       * that depends on a third party staying up, and the failure it prevents
+       * is the app looking broken on the very first launch.
+       */
+      retry: 3,
+      retryDelay: (attempt) => Math.min(3000 * 2 ** attempt, 15000),
       refetchOnReconnect: true,
     },
   },
