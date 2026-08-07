@@ -96,10 +96,19 @@ same token, in **all three** `eas.json` build profiles.
 service. The workflow retries three times with a 30-second gap for exactly this
 reason. Users rarely hit it, because the 10-minute cron keeps the service warm.
 
-**GitHub delays scheduled workflows under load**, sometimes past 10 minutes, and
-occasionally skips a tick. Both jobs are idempotent — event reminders dedupe on
-the `sent_notifications` unique index, news push advances a stored cursor — so a
-late, doubled, or skipped run never notifies anyone twice.
+**GitHub delays scheduled workflows under load, and skips ticks outright.**
+Observed on day one: the first scheduled run took ~60 minutes to appear after
+the workflow landed on `main`, and the two ticks after it were dropped. Both
+jobs are idempotent — event reminders dedupe on the `sent_notifications` unique
+index, news push advances a stored cursor — so a late, doubled, or skipped run
+never notifies anyone twice.
+
+The reminder windows are sized for this: `hour_before` covers 0–75 minutes out
+rather than a narrow band, so a skipped tick delays a reminder instead of losing
+it. See Decision 5 in `handover-decisions.md` before changing them. If the drop
+rate ever gets bad enough to matter, the fallback is a dedicated free cron
+service (cron-job.org, UptimeRobot) hitting the same endpoint — no code change,
+just move the trigger.
 
 **Scheduled workflows are disabled after 60 days of no repo activity.** GitHub
 emails first. Any commit re-arms it.
