@@ -85,8 +85,34 @@ where both threw would look exactly like a healthy one.
 
 **4. Mobile app**
 
-Set `EXPO_PUBLIC_DOMAIN` to the Render host and `EXPO_PUBLIC_API_TOKEN` to the
-same token, in **all three** `eas.json` build profiles.
+`EXPO_PUBLIC_DOMAIN` is already `fes-api.onrender.com` in all three build
+profiles. It is a hostname, not a secret, so it lives in `eas.json`.
+
+**`EXPO_PUBLIC_API_TOKEN` deliberately does not.** This repo is public and
+`eas.json` is tracked, so a token committed there is a token published — secret
+scanners find those within hours. It is worse than the risk already accepted in
+`lib/security.ts` ("the secret ships inside the IPA"): extractable by someone
+who unpacks a binary is not the same as sitting in a public repo.
+
+It is stored as an EAS environment variable instead, which is why each profile
+carries an `"environment"` key — that is what tells the build which set to pull
+in. Create it once per environment:
+
+```bash
+cd artifacts/fes-app
+npx eas env:create --scope project --environment development \
+  --name EXPO_PUBLIC_API_TOKEN --visibility sensitive
+```
+
+Repeat with `--environment preview` and `--environment production`, using the
+same value each time — the one Render and the GitHub secret already hold.
+
+`sensitive` rather than `secret`: an `EXPO_PUBLIC_` variable is inlined into the
+JS bundle at build time regardless, so claiming it is write-only would be a lie.
+Sensitive hides it from logs and the dashboard, which is the honest ceiling.
+
+The `"environment"` key needs a recent `eas-cli`. An older one errors clearly on
+an unknown field rather than silently ignoring it.
 
 ---
 
