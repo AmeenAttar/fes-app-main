@@ -9,13 +9,25 @@ name: Notification scheduler
 #   API_BASE_URL    e.g. https://fes-api.onrender.com  (no trailing slash)
 #   API_AUTH_TOKEN  same value the server is deployed with
 #
-# Note: GitHub delays scheduled runs under load, sometimes by 10+ minutes. That
-# is fine here — the reminder windows are hours wide, and the jobs are
-# idempotent, so a late or doubled run notifies nobody twice.
+# This is the BACKUP trigger. cron-job.org is the primary one — see
+# plan-files/handover-deployment.md. GitHub's scheduler proved too unreliable to
+# depend on: measured on 2026-08-07, it delivered one run per hour against a
+# 10-minute schedule, dropping five ticks in a row. Reminders survived that only
+# because the windows were widened to tolerate it, and the service still slept
+# through most of every hour.
+#
+# Both triggers running together is harmless: event reminders dedupe on the
+# sent_notifications unique index and news push advances a stored cursor, so a
+# doubled run repeats work rather than notifying anyone twice.
+#
+# The odd minutes are deliberate. GitHub sheds scheduled load hardest at the top
+# of the hour and on round intervals, which is exactly where "*/10" lands every
+# tick. Offsetting to :07, :17 … measurably improves delivery odds. It does not
+# make it reliable, which is why it is no longer the primary.
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "7,17,27,37,47,57 * * * *"
   workflow_dispatch:
 
 # A slow run must not stack up behind the next tick.

@@ -122,19 +122,67 @@ an unknown field rather than silently ignoring it.
 service. The workflow retries three times with a 30-second gap for exactly this
 reason. Users rarely hit it, because the 10-minute cron keeps the service warm.
 
-**GitHub delays scheduled workflows under load, and skips ticks outright.**
-Observed on day one: the first scheduled run took ~60 minutes to appear after
-the workflow landed on `main`, and the two ticks after it were dropped. Both
-jobs are idempotent — event reminders dedupe on the `sent_notifications` unique
-index, news push advances a stored cursor — so a late, doubled, or skipped run
-never notifies anyone twice.
+**GitHub's scheduler is the backup, not the primary.** It was the primary for
+about two hours on 2026-08-07 and measured this badly:
 
-The reminder windows are sized for this: `hour_before` covers 0–75 minutes out
-rather than a narrow band, so a skipped tick delays a reminder instead of losing
-it. See Decision 5 in `handover-decisions.md` before changing them. If the drop
-rate ever gets bad enough to matter, the fallback is a dedicated free cron
-service (cron-job.org, UptimeRobot) hitting the same endpoint — no code change,
-just move the trigger.
+```
+16:08:04Z  success  first
+17:07:16Z  success  59 min later    ← five consecutive ticks dropped
+```
+
+One run an hour against a 10-minute schedule. Two consequences: reminders came
+within a whisker of being lost (the 0–75 minute window has no margin against
+59-minute gaps), and Render slept through roughly 45 minutes of every hour, so
+users hit 30–60 second cold starts on open.
+
+Its cron was moved off round minutes (`7,17,27…` rather than `*/10`) because
+GitHub sheds scheduled load hardest at the top of the hour and on round
+intervals. That improves the odds; it does not make it dependable.
+
+Both triggers can run together safely — event reminders dedupe on the
+`sent_notifications` unique index and news push advances a stored cursor, so a
+doubled run repeats work rather than notifying anyone twice.
+
+The reminder windows are still sized to tolerate gaps: `hour_before` covers
+0–75 minutes out rather than a narrow band. See Decision 5 in
+`handover-decisions.md` before changing them.
+
+---
+
+## Primary trigger — cron-job.org
+
+Free, no card, no expiry, 1-minute resolution. It calls the same endpoint, so
+there is no code involved — only configuration.
+
+1. Sign up at https://console.cron-job.org
+2. **Create cronjob**, then fill in:
+
+   | Field | Value |
+   |---|---|
+   | Title | `FES scheduler` |
+   | URL | `https://fes-api.onrender.com/api/tasks/run` |
+   | Schedule | Every 10 minutes |
+   | Request method | **POST** (under Advanced) |
+
+3. Under **Advanced → Headers**, add:
+
+   ```
+   Authorization: Bearer <the same API_AUTH_TOKEN>
+   ```
+
+4. Enable **notifications on failure** so a broken schedule emails you rather
+   than going quiet — the whole point of moving off GitHub.
+5. Save, then use **Test run** and confirm `200` with
+   `{"events":"ok","news":"ok",...}`.
+
+Leave the GitHub workflow enabled. It costs nothing, and on the days
+cron-job.org has an outage it is the difference between degraded and dead.
+
+**What this costs you:** `API_AUTH_TOKEN` is now held by a third party. It is a
+shared secret already destined to ship inside the IPA, so the marginal exposure
+is small — but it is a credential handed to another service, and rotating it
+now means updating four places rather than three (Render, GitHub, cron-job.org,
+EAS).
 
 **Scheduled workflows are disabled after 60 days of no repo activity.** GitHub
 emails first. Any commit re-arms it.
