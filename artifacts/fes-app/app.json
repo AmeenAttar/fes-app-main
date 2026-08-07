@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "fes-app",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "notification": {
       "icon": "./assets/images/icon.png",
@@ -18,7 +18,11 @@
       "bundleIdentifier": "org.fescenter.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "LSApplicationQueriesSchemes": ["mailto"]
+        "LSApplicationQueriesSchemes": [
+          "mailto",
+          "weather",
+          "maps"
+        ]
       }
     },
     "android": {
@@ -51,6 +55,12 @@
           "resizeMode": "contain",
           "backgroundColor": "#FFFFFF"
         }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Allow the FES Center app to add events to your calendar."
+        }
       ]
     ],
     "experiments": {
@@ -58,9 +68,13 @@
       "reactCompiler": true
     },
     "extra": {
+      "router": {
+        "origin": "https://replit.com/"
+      },
       "eas": {
-        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+        "projectId": "706ee23d-9f64-46e3-80b6-bb112cbfb6d2"
       }
-    }
+    },
+    "owner": "ameen01"
   }
 }

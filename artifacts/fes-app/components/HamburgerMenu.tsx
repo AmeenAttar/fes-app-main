@@ -1,21 +1,33 @@
 import { Feather } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  Animated,
   Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { WeatherWidget } from "@/components/WeatherWidget";
+import {
+  measureAnchor,
+  zoomTransform,
+  ZOOM_CLOSE_EASING,
+  ZOOM_CLOSE_MS,
+  ZOOM_OPEN_EASING,
+  ZOOM_OPEN_MS,
+  ZOOM_RADIUS,
+  type AnchorRect,
+} from "@/components/ZoomTransition";
 import { MENU_BLOCKS, type MenuBlock } from "@/constants/menu";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useColors } from "@/hooks/useColors";
@@ -29,10 +41,20 @@ export function HamburgerButton({ color }: HamburgerButtonProps) {
   const colors = useColors();
   const iconColor = color ?? colors.primary;
   const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState<AnchorRect | null>(null);
+  const btnRef = useRef<View>(null);
+
   return (
     <>
       <Pressable
-        onPress={() => setOpen(true)}
+        ref={btnRef}
+        onPress={() => {
+          // Measured before opening so the drawer can unfold from this button.
+          measureAnchor(btnRef).then((rect) => {
+            setAnchor(rect);
+            setOpen(true);
+          });
+        }}
         hitSlop={12}
         accessibilityLabel="Open navigation menu"
         style={({ pressed }) => [
@@ -43,28 +65,62 @@ export function HamburgerButton({ color }: HamburgerButtonProps) {
       >
         <Feather name="menu" size={26} color={iconColor} />
       </Pressable>
-      <NavMenuModal open={open} onClose={() => setOpen(false)} />
+      <NavMenuModal
+        open={open}
+        anchor={anchor}
+        onClose={() => setOpen(false)}
+      />
     </>
   );
 }
 
 interface NavMenuModalProps {
   open: boolean;
+  /** Rect of the button that opened the drawer; it scales in and out of this. */
+  anchor: AnchorRect | null;
   onClose: () => void;
 }
 
-function NavMenuModal({ open, onClose }: NavMenuModalProps) {
+function NavMenuModal({ open, anchor, onClose }: NavMenuModalProps) {
   const insets = useSafeAreaInsets();
   const colors = useColors();
-  const { scheme, setScheme } = useTheme();
+  const { scheme } = useTheme();
+  const { width: screenW, height: screenH } = useWindowDimensions();
   const isDark = scheme === "dark";
 
-  const onPress = async (block: MenuBlock) => {
+  const progress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!open) return;
+    progress.setValue(0);
+    Animated.timing(progress, {
+      toValue: 1,
+      duration: ZOOM_OPEN_MS,
+      easing: ZOOM_OPEN_EASING,
+      useNativeDriver: true,
+    }).start();
+  }, [open, progress]);
+
+  /** Collapses the drawer back into the button, then unmounts and continues. */
+  const closeThen = (after?: () => void) => {
+    Animated.timing(progress, {
+      toValue: 0,
+      duration: ZOOM_CLOSE_MS,
+      easing: ZOOM_CLOSE_EASING,
+      useNativeDriver: true,
+    }).start(() => {
+      onClose();
+      after?.();
+    });
+  };
+
+  const requestClose = () => closeThen();
+
+  const onPress = (block: MenuBlock) => {
     if (Platform.OS !== "web") {
       Haptics.selectionAsync().catch(() => undefined);
     }
-    onClose();
-    setTimeout(() => {
+    closeThen(() => {
       if (block.kind === "internal" && block.route) {
         router.push(block.route as never);
       } else if (block.kind === "external" && block.url) {
@@ -74,33 +130,51 @@ function NavMenuModal({ open, onClose }: NavMenuModalProps) {
           controlsColor: "#FFFFFF",
         }).catch(() => undefined);
       }
-    }, 80);
+    });
   };
 
   const onPressHome = () => {
     if (Platform.OS !== "web") {
       Haptics.selectionAsync().catch(() => undefined);
     }
-    onClose();
-    setTimeout(() => {
-      router.replace("/menu");
-    }, 80);
+    closeThen(() => router.replace("/menu"));
   };
 
   const fg = colors.menuDrawerForeground;
   const muted = colors.menuDrawerMutedForeground;
   const border = colors.menuDrawerBorder;
 
+  // Falls back to the hamburger's usual top-right seat if measuring failed.
+  const originRect: AnchorRect = anchor ?? {
+    x: Math.max(screenW - 64, 0),
+    y: 60,
+    width: 44,
+    height: 44,
+  };
+
   return (
     <Modal
       visible={open}
-      animationType="slide"
-      onRequestClose={onClose}
-      presentationStyle="overFullScreen"
-      transparent={false}
+      animationType="none"
+      onRequestClose={requestClose}
+      transparent
+      statusBarTranslucent
     >
-      <View
-        style={[styles.modalOuter, { backgroundColor: colors.menuDrawerBackground }]}
+      <Animated.View
+        style={[
+          styles.modalOuter,
+          {
+            backgroundColor: colors.menuDrawerBackground,
+            borderRadius: ZOOM_RADIUS,
+            opacity: progress,
+            transform: zoomTransform(progress, originRect, {
+              x: 0,
+              y: 0,
+              width: screenW,
+              height: screenH,
+            }),
+          },
+        ]}
       >
         <ScrollView
           style={styles.scroll}
@@ -118,15 +192,58 @@ function NavMenuModal({ open, onClose }: NavMenuModalProps) {
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: fg }]}>MENU</Text>
               <Pressable
-                onPress={onClose}
-                hitSlop={12}
+                onPress={requestClose}
+                hitSlop={8}
+                accessibilityRole="button"
                 accessibilityLabel="Close menu"
                 style={({ pressed }) => [
-                  styles.closeBtn,
-                  pressed && { opacity: 0.55 },
+                  styles.glassCloseBtn,
+                  {
+                    borderColor: "rgba(255,255,255,0.38)",
+                    opacity: pressed ? 0.88 : 1,
+                    ...Platform.select({
+                      ios: {
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.25,
+                        shadowRadius: 4,
+                      },
+                      android: { elevation: 4 },
+                    }),
+                  },
                 ]}
               >
-                <Feather name="x" size={28} color={fg} />
+                {Platform.OS !== "web" ? (
+                  <BlurView
+                    tint={scheme === "dark" ? "dark" : "light"}
+                    intensity={scheme === "dark" ? 38 : 28}
+                    style={StyleSheet.absoluteFillObject}
+                  />
+                ) : (
+                  <View
+                    style={[
+                      StyleSheet.absoluteFillObject,
+                      {
+                        backgroundColor: isDark
+                          ? "rgba(6,54,84,0.65)"
+                          : "rgba(0,105,166,0.45)",
+                      },
+                    ]}
+                  />
+                )}
+                <View
+                  pointerEvents="none"
+                  style={[
+                    StyleSheet.absoluteFillObject,
+                    {
+                      backgroundColor: "rgba(255,255,255,0.14)",
+                      borderRadius: 12,
+                    },
+                  ]}
+                />
+                <View style={styles.glassCloseIconLayer}>
+                  <Feather name="x" size={24} color={fg} />
+                </View>
               </Pressable>
             </View>
 
@@ -173,51 +290,25 @@ function NavMenuModal({ open, onClose }: NavMenuModalProps) {
               </Pressable>
             ))}
 
-            <View style={[styles.themeRow, { borderTopColor: border }]}>
-              <View
-                style={[
-                  styles.themeCluster,
-                  {
-                    backgroundColor:
-                      scheme === "dark"
-                        ? "rgba(255,255,255,0.10)"
-                        : "rgba(0, 35, 58, 0.45)",
-                  },
-                ]}
-              >
-                <Feather name={isDark ? "moon" : "sun"} size={18} color={fg} />
-                <Text style={[styles.themeLabel, { color: fg }]}>
-                  Appearance
-                </Text>
-                <Switch
-                  accessibilityRole="switch"
-                  accessibilityLabel="Appearance"
-                  accessibilityHint={
-                    isDark
-                      ? "Turn off to use light colors across the app"
-                      : "Turn on to use dark colors across the app"
-                  }
-                  value={isDark}
-                  onValueChange={(on) => setScheme(on ? "dark" : "light")}
-                  trackColor={{
-                    false:
-                      scheme === "dark"
-                        ? "rgba(255,255,255,0.35)"
-                        : "rgba(0, 28, 48, 0.95)",
-                    true: colors.menuHomeHighlight,
-                  }}
-                  thumbColor="#f8fafc"
-                  ios_backgroundColor={
-                    scheme === "dark"
-                      ? "rgba(255,255,255,0.28)"
-                      : "rgba(0, 28, 48, 0.92)"
-                  }
-                />
-              </View>
-            </View>
+            <Pressable
+              onPress={() => closeThen(() => router.push("/settings" as never))}
+              android_ripple={{ color: "rgba(255,255,255,0.18)" }}
+              accessibilityRole="button"
+              accessibilityLabel="Settings"
+              style={({ pressed }) => [
+                styles.row,
+                { borderBottomColor: border },
+                pressed && { backgroundColor: "rgba(255,255,255,0.08)" },
+              ]}
+            >
+              <Feather name="settings" size={22} color={fg} />
+              <Text style={[styles.rowLabel, { color: fg }]}>Settings</Text>
+              <Feather name="chevron-right" size={18} color={muted} />
+            </Pressable>
+
           </View>
         </ScrollView>
-      </View>
+      </Animated.View>
     </Modal>
   );
 }
@@ -233,6 +324,8 @@ const styles = StyleSheet.create({
   },
   modalOuter: {
     flex: 1,
+    // Keeps content inside the rounded corners while the drawer is scaled down.
+    overflow: "hidden",
   },
   scroll: {
     flex: 1,
@@ -258,8 +351,19 @@ const styles = StyleSheet.create({
     fontSize: 22,
     letterSpacing: 2,
   },
-  closeBtn: {
-    padding: 4,
+  glassCloseBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    overflow: "hidden",
+    borderWidth: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  glassCloseIconLayer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
   },
   homeRow: {
     borderRadius: 10,
@@ -281,26 +385,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     letterSpacing: 1,
     textTransform: "uppercase",
-  },
-  themeRow: {
-    alignItems: "center",
-    paddingTop: 16,
-    marginTop: 10,
-    paddingBottom: 4,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  themeCluster: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    maxWidth: "100%",
-  },
-  themeLabel: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 14,
-    letterSpacing: 0.3,
   },
 });

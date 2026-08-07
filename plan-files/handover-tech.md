@@ -113,15 +113,16 @@ External dependencies:
 | `SESSION_SECRET` | Yes | — | Express session secret (currently only required by middleware; no session routes yet) |
 | `NODE_ENV` | No | `development` | Set to `production` for deployed environments |
 
-**Planned env vars (not yet implemented — see Task #1 and Task #3 and Task #3):**
+**Planned env vars (not yet implemented — see Task #1 and Task #3):**
 
 | Variable | Description |
 |---|---|
 | `FESCENTER_BASE_URL` | Base URL for FES Center website scraping (default: `https://fescenter.org/test`) |
 | `ADDEVENT_API_KEY` | AddEvent REST API v2 bearer token (Task #3) |
-| `GOOGLE_SHEETS_API_KEY` | Google Cloud API key for Sheets v4 (Task #4) |
-| `INVENTORY_SHEET_ID` | Google Sheet ID for equipment inventory (Task #4) |
-| `INVENTORY_SHEET_NAME` | Tab name in the Google Sheet (default: `Sheet1`) |
+
+**Content sources:** Equipment and Supporting Resources are read from fescenter.org, not a spreadsheet — no Google Sheets key is required. Optional overrides: `EQUIPMENT_REPO_SLUG` (default `equipmentrepo`), `SUPPORTING_RESOURCES_SLUG` (default `supporting-resources`). See `handover-data-sources.md`.
+
+**Security / ops:** `API_AUTH_TOKEN` (guards the push-token writes; mirror into the app as `EXPO_PUBLIC_API_TOKEN`), `ALLOWED_ORIGINS` (browser CORS allowlist; native apps send no Origin), `SENTRY_DSN` (error reporting; unset means errors only reach stdout).
 
 ### fes-app (Expo, set in eas.json or .env)
 

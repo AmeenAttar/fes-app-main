@@ -1,9 +1,14 @@
 import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { useQuery } from "@tanstack/react-query";
 import React, { useMemo } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { fetchWeather, type WeatherResponse } from "@/lib/api";
+import {
+  FES_CENTER_WEATHER_COORDS,
+  openSystemWeatherAt,
+} from "@/lib/open-system-weather";
 
 /** Menu-drawer only: frosted card on brand blue — not tied to app light/dark theme. */
 const FES_TEAL = "#00b2a9";
@@ -76,13 +81,32 @@ export function WeatherWidget() {
 }
 
 function WeatherError() {
+  const onPress = () => {
+    if (Platform.OS !== "web") {
+      void Haptics.selectionAsync().catch(() => undefined);
+    }
+    void openSystemWeatherAt(
+      FES_CENTER_WEATHER_COORDS.latitude,
+      FES_CENTER_WEATHER_COORDS.longitude,
+    ).catch(() => undefined);
+  };
   return (
-    <View style={[styles.card, styles.errorCard, { backgroundColor: CARD_BG }]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Open weather for Cleveland FES Center"
+      accessibilityHint="Opens your device weather or maps at the FES Center location"
+      style={({ pressed }) => [
+        styles.card,
+        styles.errorCard,
+        { backgroundColor: CARD_BG, opacity: pressed ? 0.88 : 1 },
+      ]}
+    >
       <Feather name="cloud-off" size={18} color={TEXT_MUTED} />
       <Text style={[styles.errorText, { color: TEXT_MUTED }]}>
         Weather unavailable
       </Text>
-    </View>
+    </Pressable>
   );
 }
 
@@ -104,8 +128,26 @@ function WeatherCard({ data }: WeatherCardProps) {
     [data.today.sunset],
   );
 
+  const onPress = () => {
+    if (Platform.OS !== "web") {
+      void Haptics.selectionAsync().catch(() => undefined);
+    }
+    void openSystemWeatherAt(data.location.latitude, data.location.longitude).catch(
+      () => undefined,
+    );
+  };
+
   return (
-    <View style={[styles.card, { backgroundColor: CARD_BG }]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Open weather for ${data.location.name}`}
+      accessibilityHint="Opens your device weather or maps at this location"
+      style={({ pressed }) => [
+        styles.card,
+        { backgroundColor: CARD_BG, opacity: pressed ? 0.92 : 1 },
+      ]}
+    >
       <View style={styles.header}>
         <Text style={[styles.locationText, { color: TEXT }]}>
           {data.location.name}
@@ -176,7 +218,7 @@ function WeatherCard({ data }: WeatherCardProps) {
           </View>
         </>
       ) : null}
-    </View>
+    </Pressable>
   );
 }
 

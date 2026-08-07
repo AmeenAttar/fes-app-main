@@ -2,16 +2,16 @@
  * Runtime configuration for the api-server.
  *
  * URLs that point at the FES Center website are derived from
- * `FESCENTER_BASE_URL` so the imminent migration from
- * `https://fescenter.org/test` to `https://fescenter.org` is a one-line
- * env-var change with zero code edits.
+ * `FESCENTER_BASE_URL`. The site migration off the old `/test` tier is
+ * complete — production is `https://fescenter.org` and that is the default.
+ * Override the env var only to point at a different tier.
  *
  * The Google Calendar iCal feed (fescalendar@fescenter.org) is intentionally
  * NOT derived from this base URL — it is hosted on `calendar.google.com`
  * and is not affected by the website migration.
  */
 
-const DEFAULT_FESCENTER_BASE_URL = "https://fescenter.org/test";
+const DEFAULT_FESCENTER_BASE_URL = "https://fescenter.org";
 
 function readBaseUrl(): string {
   const raw = process.env["FESCENTER_BASE_URL"]?.trim();

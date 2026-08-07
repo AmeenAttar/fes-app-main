@@ -1,4 +1,8 @@
-import { Router } from "express";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+import { Router, type Response } from "express";
 import ical from "node-ical";
 
 const router = Router();
@@ -10,6 +14,19 @@ const ICS_URL =
   "https://calendar.google.com/calendar/ical/fescalendar%40fescenter.org/public/basic.ics";
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
+/**
+ * How long cached events may still be served when the upstream feed is failing.
+ * Google rate-limits this ICS endpoint per-IP (429), so a stale list is far
+ * better than losing the events feature entirely.
+ */
+const STALE_MAX_MS = 24 * 60 * 60 * 1000;
+/** Fallback back-off when a 429 arrives without a usable Retry-After header. */
+const DEFAULT_COOLDOWN_MS = 15 * 60 * 1000;
+/**
+ * Cache is mirrored to disk so process restarts do not re-hit Google. Repeated
+ * cold starts are what trigger the per-IP 429 in the first place.
+ */
+const DISK_CACHE_PATH = path.join(os.tmpdir(), "fes-events-cache-v1.json");
 const HORIZON_DAYS = 365;
 const MAX_EVENTS = 100;
 /** Max actionable URL buttons surfaced per event (deduped). */
@@ -42,7 +59,64 @@ export interface EventDto {
   actionLinks: EventActionLink[];
 }
 
-let cache: { ts: number; data: EventDto[] } | null = null;
+interface CacheEntry {
+  ts: number;
+  data: EventDto[];
+}
+
+/** Raised when the upstream ICS feed responds non-2xx, carrying its status. */
+export class CalendarUpstreamError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly retryAfterMs: number | null,
+  ) {
+    super(message);
+    this.name = "CalendarUpstreamError";
+  }
+}
+
+function readDiskCache(): CacheEntry | null {
+  try {
+    const parsed = JSON.parse(
+      fs.readFileSync(DISK_CACHE_PATH, "utf8"),
+    ) as Partial<CacheEntry>;
+    if (typeof parsed?.ts === "number" && Array.isArray(parsed.data)) {
+      return { ts: parsed.ts, data: parsed.data as EventDto[] };
+    }
+  } catch {
+    /* no cache on disk yet, or unreadable — treat as empty */
+  }
+  return null;
+}
+
+function writeDiskCache(entry: CacheEntry): void {
+  try {
+    fs.writeFileSync(DISK_CACHE_PATH, JSON.stringify(entry), "utf8");
+  } catch {
+    /* cache persistence is best-effort */
+  }
+}
+
+/** Seeded from disk so a restart starts warm instead of hitting Google. */
+let cache: CacheEntry | null = readDiskCache();
+/** Dedupes concurrent refreshes so a cold cache triggers one fetch, not N. */
+let inFlight: Promise<EventsResult> | null = null;
+/** Epoch ms before which we must not call the upstream again (429 back-off). */
+let cooldownUntil = 0;
+
+/** Retry-After is either delta-seconds or an HTTP date. */
+function parseRetryAfterMs(header: string | null): number | null {
+  if (!header) return null;
+  const seconds = Number(header.trim());
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+  const when = Date.parse(header);
+  if (Number.isFinite(when)) {
+    const delta = when - Date.now();
+    return delta > 0 ? delta : 0;
+  }
+  return null;
+}
 
 function htmlToText(s: string | undefined | null): string | null {
   if (!s) return null;
@@ -273,7 +347,11 @@ async function loadEventsFromIcsUncached(): Promise<EventDto[]> {
     headers: { "User-Agent": "Mozilla/5.0 FES-App" },
   });
   if (!res.ok) {
-    throw new Error(`Calendar fetch failed: ${res.status}`);
+    throw new CalendarUpstreamError(
+      `Calendar fetch failed: ${res.status}`,
+      res.status,
+      parseRetryAfterMs(res.headers.get("retry-after")),
+    );
   }
   const text = await res.text();
 
@@ -348,14 +426,65 @@ async function loadEventsFromIcsUncached(): Promise<EventDto[]> {
   return events.slice(0, MAX_EVENTS);
 }
 
-export async function loadEvents(): Promise<EventDto[]> {
-  if (cache && Date.now() - cache.ts < CACHE_TTL_MS) {
-    return cache.data;
+export interface EventsResult {
+  events: EventDto[];
+  /** True when served from cache because a refresh failed (clients may flag this). */
+  stale: boolean;
+  /** Epoch ms the served data was actually fetched from the calendar. */
+  fetchedAt: number;
+}
+
+/** Cached events within {@link STALE_MAX_MS}, or null when too old to serve. */
+function servableStale(): EventsResult | null {
+  if (cache && Date.now() - cache.ts < STALE_MAX_MS) {
+    return { events: cache.data, stale: true, fetchedAt: cache.ts };
+  }
+  return null;
+}
+
+export async function loadEventsWithMeta(): Promise<EventsResult> {
+  const now = Date.now();
+
+  if (cache && now - cache.ts < CACHE_TTL_MS) {
+    return { events: cache.data, stale: false, fetchedAt: cache.ts };
   }
 
-  const fromIcs = await loadEventsFromIcsUncached();
-  cache = { ts: Date.now(), data: fromIcs };
-  return fromIcs;
+  // Upstream asked us to back off; keep serving what we already have rather
+  // than burning the cooldown and getting rate-limited for longer.
+  if (now < cooldownUntil) {
+    const stale = servableStale();
+    if (stale) return stale;
+  }
+
+  if (inFlight) return inFlight;
+
+  inFlight = (async () => {
+    try {
+      const fresh = await loadEventsFromIcsUncached();
+      cache = { ts: Date.now(), data: fresh };
+      cooldownUntil = 0;
+      writeDiskCache(cache);
+      return { events: fresh, stale: false, fetchedAt: cache.ts };
+    } catch (err) {
+      if (err instanceof CalendarUpstreamError && err.status === 429) {
+        cooldownUntil =
+          Date.now() + (err.retryAfterMs ?? DEFAULT_COOLDOWN_MS);
+      }
+      // A transient upstream failure should not take the feature down.
+      const stale = servableStale();
+      if (stale) return stale;
+      throw err;
+    } finally {
+      inFlight = null;
+    }
+  })();
+
+  return inFlight;
+}
+
+/** Events only — used by the notification scheduler, which ignores staleness. */
+export async function loadEvents(): Promise<EventDto[]> {
+  return (await loadEventsWithMeta()).events;
 }
 
 function decodeRouteEventId(raw: string | undefined): string {
@@ -367,17 +496,29 @@ function decodeRouteEventId(raw: string | undefined): string {
   }
 }
 
-router.get("/events", async (req, res, next) => {
+/** 503 for rate-limiting (retryable), 502 for other upstream failures. */
+function respondUpstreamFailure(res: Response, err: unknown): void {
+  const rateLimited =
+    err instanceof CalendarUpstreamError && err.status === 429;
+  res.status(rateLimited ? 503 : 502).json({
+    error: "events_unavailable",
+    message: rateLimited
+      ? "The calendar feed is rate-limited right now. Please try again shortly."
+      : "Could not load events from the calendar feed.",
+  });
+}
+
+router.get("/events", async (req, res) => {
   try {
-    const events = await loadEvents();
-    res.json({ events });
+    const { events, stale, fetchedAt } = await loadEventsWithMeta();
+    res.json({ events, stale, fetchedAt });
   } catch (err) {
     req.log.error({ err }, "Failed to load events");
-    next(err);
+    respondUpstreamFailure(res, err);
   }
 });
 
-router.get("/events/:eventId", async (req, res, next) => {
+router.get("/events/:eventId", async (req, res) => {
   try {
     const raw = req.params["eventId"];
     const eventId = decodeRouteEventId(raw);
@@ -385,16 +526,16 @@ router.get("/events/:eventId", async (req, res, next) => {
       res.status(400).json({ error: "missing_event_id" });
       return;
     }
-    const events = await loadEvents();
+    const { events, stale, fetchedAt } = await loadEventsWithMeta();
     const event = events.find((e) => e.id === eventId);
     if (!event) {
       res.status(404).json({ error: "event_not_found" });
       return;
     }
-    res.json({ event });
+    res.json({ event, stale, fetchedAt });
   } catch (err) {
     req.log.error({ err }, "Failed to load event");
-    next(err);
+    respondUpstreamFailure(res, err);
   }
 });
 

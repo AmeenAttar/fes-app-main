@@ -5,7 +5,10 @@ import {
   Inter_700Bold,
   useFonts,
 } from "@expo-google-fonts/inter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
+import { QueryClient } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
@@ -16,11 +19,13 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AppHeader } from "@/components/AppHeader";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ZoomTransitionProvider } from "@/components/ZoomTransition";
 import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
 import { useColors } from "@/hooks/useColors";
 import {
   configureNotificationHandler,
   registerForPushNotifications,
+  subscribePushNotificationDeepLinks,
 } from "@/lib/push";
 
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -28,7 +33,27 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 });
 configureNotificationHandler();
 
-const queryClient = new QueryClient();
+/** Cached responses older than this are dropped rather than restored on launch. */
+const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Persisted below, so a cold start renders last-known data immediately
+      // and refetches behind it instead of showing an error on a bad connection.
+      gcTime: CACHE_MAX_AGE_MS,
+      staleTime: 5 * 60 * 1000,
+      retry: 2,
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+      refetchOnReconnect: true,
+    },
+  },
+});
+
+const persister = createAsyncStoragePersister({
+  storage: AsyncStorage,
+  key: "@fes/query-cache-v1",
+});
 
 function ThemedGestureShell({ children }: { children: React.ReactNode }) {
   const colors = useColors();
@@ -71,15 +96,36 @@ function RootLayoutNav() {
         name="events/[id]"
         options={{ title: "Event" }}
       />
+      {/*
+        Presented over the home screen (not in place of it) so the calendar can
+        scale up as an overlay, the way the nav drawer does. The screen renders
+        its own AppHeader inside the animated container so the header scales
+        with the content instead of popping in at full size.
+      */}
+      <Stack.Screen
+        name="fes-calendar"
+        options={{
+          title: "FES Calendar",
+          headerShown: false,
+          presentation: "transparentModal",
+          animation: "none",
+          contentStyle: { backgroundColor: "transparent" },
+        }}
+      />
       <Stack.Screen
         name="supporting-resources"
         options={{ title: "Supporting Resources" }}
       />
       <Stack.Screen
-        name="equipment-inventory"
+        name="equipment-inventory/index"
         options={{ title: "Equipment Inventory" }}
       />
+      <Stack.Screen
+        name="equipment-inventory/[slug]"
+        options={{ title: "" }}
+      />
       <Stack.Screen name="tuesdays" options={{ title: "Tuesdays" }} />
+      <Stack.Screen name="settings" options={{ title: "Settings" }} />
       </Stack>
     </>
   );
@@ -107,17 +153,27 @@ export default function RootLayout() {
     registerForPushNotifications().catch(() => undefined);
   }, []);
 
+  useEffect(() => {
+    if (!fontsLoaded && !fontError) return;
+    return subscribePushNotificationDeepLinks();
+  }, [fontsLoaded, fontError]);
+
   if (!fontsLoaded && !fontError) return null;
 
   return (
     <SafeAreaProvider>
       <ThemeProvider>
         <ErrorBoundary>
-          <QueryClientProvider client={queryClient}>
+          <PersistQueryClientProvider
+            client={queryClient}
+            persistOptions={{ persister, maxAge: CACHE_MAX_AGE_MS }}
+          >
             <ThemedGestureShell>
-              <RootLayoutNav />
+              <ZoomTransitionProvider>
+                <RootLayoutNav />
+              </ZoomTransitionProvider>
             </ThemedGestureShell>
-          </QueryClientProvider>
+          </PersistQueryClientProvider>
         </ErrorBoundary>
       </ThemeProvider>
     </SafeAreaProvider>

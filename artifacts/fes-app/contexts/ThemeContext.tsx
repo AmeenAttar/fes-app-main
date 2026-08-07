@@ -7,6 +7,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
+import { Appearance } from "react-native";
 
 const STORAGE_KEY = "fes-app-color-scheme";
 
@@ -61,6 +62,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
   }, [persist]);
+
+  /**
+   * Keeps iOS/Android's own chrome — system alerts, the keyboard, the in-app
+   * browser — on the same scheme the app is using.
+   *
+   * This preference is the app's own, not the device's, so `userInterfaceStyle:
+   * "automatic"` alone isn't enough: that follows the *system* setting, which
+   * can disagree with the toggle in Settings. Setting the app-level override
+   * explicitly is what actually makes the two agree.
+   */
+  useEffect(() => {
+    if (!ready) return;
+    Appearance.setColorScheme(scheme);
+  }, [scheme, ready]);
 
   const value = useMemo(
     () => ({

@@ -45,3 +45,13 @@ export const sentNotificationsTable = pgTable(
 );
 
 export type SentNotification = typeof sentNotificationsTable.$inferSelect;
+
+/** Single-row cursor for WordPress news push polling (see api-server `news-push`). */
+export const NEWS_PUSH_STATE_KEY = "default" as const;
+
+export const newsPushStateTable = pgTable("news_push_state", {
+  singletonKey: text("singleton_key").primaryKey(),
+  lastPublishedAt: timestamp("last_published_at", { withTimezone: true }).notNull(),
+});
+
+export type NewsPushState = typeof newsPushStateTable.$inferSelect;

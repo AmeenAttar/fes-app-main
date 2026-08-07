@@ -52,18 +52,23 @@ export function AppHeader({ options, back, navigation }: AppHeaderProps) {
             <Pressable
               onPress={navigation.goBack}
               hitSlop={12}
+              accessibilityRole="button"
               accessibilityLabel="Go back"
               style={({ pressed }) => [
-                styles.iconBtn,
+                styles.headerIconBtn,
+                { backgroundColor: `${colors.primary}12` },
                 pressed && { opacity: 0.55 },
               ]}
             >
-              <Feather name="chevron-left" size={28} color={colors.primary} />
+              <Feather name="chevron-left" size={26} color={colors.primary} />
             </Pressable>
           ) : null}
         </View>
 
-        <Text style={[styles.title, { color: colors.primary }]} numberOfLines={1}>
+        <Text
+          style={[styles.title, { color: colors.primary }]}
+          numberOfLines={1}
+        >
           {title}
         </Text>
 
@@ -87,23 +92,29 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   leftSide: {
-    width: 40,
+    width: 46,
     alignItems: "flex-start",
     justifyContent: "center",
   },
   rightSide: {
-    width: 44,
+    width: 46,
     alignItems: "flex-end",
     justifyContent: "center",
   },
-  iconBtn: {
-    paddingVertical: 4,
-    paddingHorizontal: 4,
+  /** Matches {@link HamburgerButton} `styles.btn` (no border); margin mirrors its `marginRight`. */
+  headerIconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    marginLeft: 2,
+    justifyContent: "center",
+    alignItems: "center",
   },
   title: {
     flex: 1,
     fontFamily: "Inter_700Bold",
     fontSize: 22,
     textAlign: "left",
+    paddingLeft: 6,
   },
 });

@@ -1,10 +1,12 @@
 import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { useLocalSearchParams } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import React from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   Platform,
   Pressable,
@@ -14,17 +16,17 @@ import {
   View,
 } from "react-native";
 
+import { FES_GOOGLE_CALENDAR_WEB_URL } from "@/constants/fes-google-calendar-web";
 import { useColors } from "@/hooks/useColors";
+import { addEventToCalendar } from "@/lib/add-to-calendar";
 import {
   calendarEventDetailQueryKey,
   calendarEventsListQueryKey,
   fetchEventById,
   type CalendarEvent,
   type EventActionLinkKind,
+  type EventsResult,
 } from "@/lib/api";
-
-const CALENDAR_HTML_URL =
-  "https://calendar.google.com/calendar/u/0?cid=ZmVzY2FsZW5kYXJAZmVzY2VudGVyLm9yZw";
 
 function hasRsvpLink(event: CalendarEvent): boolean {
   return (
@@ -116,10 +118,10 @@ export default function EventDetailScreen() {
     queryKey: calendarEventDetailQueryKey(eventId ?? ""),
     queryFn: async () => {
       if (!eventId) throw new Error("Missing event id");
-      const list = queryClient.getQueryData<CalendarEvent[]>(
+      const listResult = queryClient.getQueryData<EventsResult>(
         calendarEventsListQueryKey,
       );
-      const fromList = list?.find((e) => e.id === eventId);
+      const fromList = listResult?.events.find((e) => e.id === eventId);
       try {
         return await fetchEventById(eventId);
       } catch (e) {
@@ -130,6 +132,22 @@ export default function EventDetailScreen() {
     enabled: !!eventId,
     staleTime: 5 * 60 * 1000,
   });
+
+  const [addState, setAddState] = useState<"idle" | "working" | "saved">(
+    "idle",
+  );
+
+  const onAddToCalendar = async () => {
+    if (!data || addState === "working") return;
+    if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => undefined);
+    setAddState("working");
+    const result = await addEventToCalendar(data);
+    setAddState(result.status === "saved" ? "saved" : "idle");
+
+    if (result.status === "unsupported" || result.status === "error") {
+      Alert.alert("Couldn’t add to calendar", result.message);
+    }
+  };
 
   const openInBrowser = async (url: string) => {
     try {
@@ -226,6 +244,40 @@ export default function EventDetailScreen() {
         </Text>
       ) : null}
 
+      <Pressable
+        onPress={onAddToCalendar}
+        disabled={addState === "working"}
+        accessibilityRole="button"
+        accessibilityLabel={
+          addState === "saved"
+            ? "Added to your calendar. Tap to add again."
+            : `Add ${data.title} to your calendar`
+        }
+        style={({ pressed }) => [
+          styles.cta,
+          {
+            backgroundColor: colors.primary,
+            borderRadius: colors.radius,
+            opacity: pressed || addState === "working" ? 0.85 : 1,
+          },
+        ]}
+      >
+        {addState === "working" ? (
+          <ActivityIndicator color="#FFFFFF" />
+        ) : (
+          <>
+            <Feather
+              name={addState === "saved" ? "check" : "calendar"}
+              size={18}
+              color="#FFFFFF"
+            />
+            <Text style={styles.ctaText}>
+              {addState === "saved" ? "Added to calendar" : "Add to my calendar"}
+            </Text>
+          </>
+        )}
+      </Pressable>
+
       {showActionLinks ? (
         <>
           <Text style={[styles.hint, { color: colors.mutedForeground }]}>
@@ -293,7 +345,7 @@ export default function EventDetailScreen() {
       )}
 
       <Pressable
-        onPress={() => openInBrowser(CALENDAR_HTML_URL)}
+        onPress={() => openInBrowser(FES_GOOGLE_CALENDAR_WEB_URL)}
         style={({ pressed }) => [
           styles.secondaryCta,
           {
