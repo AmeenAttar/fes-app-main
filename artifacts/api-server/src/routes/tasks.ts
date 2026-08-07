@@ -34,8 +34,21 @@ tasksRouter.post("/tasks/run", (req, res, next) => {
   const startedAt = Date.now();
   runSchedulerOnce()
     .then((result) => {
-      req.log?.info({ ...result }, "Scheduler run triggered over HTTP");
-      res.json({ ...result, durationMs: Date.now() - startedAt });
+      const failed = result.events === "failed" || result.news === "failed";
+      const body = { ...result, durationMs: Date.now() - startedAt };
+
+      // The jobs catch their own errors so one cannot abort the other, which
+      // means a 200 here would be indistinguishable from a run where both threw
+      // — the cron would stay green forever while nothing was delivered. A 5xx
+      // is what turns a broken schedule into a red workflow and an email.
+      if (failed) {
+        req.log?.error(body, "Scheduler run had a failing job");
+        res.status(500).json({ error: "job_failed", ...body });
+        return;
+      }
+
+      req.log?.info(body, "Scheduler run triggered over HTTP");
+      res.json(body);
     })
     .catch(next);
 });

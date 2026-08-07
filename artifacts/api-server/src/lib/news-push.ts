@@ -65,8 +65,10 @@ export async function processNewsPushOnce(): Promise<void> {
   try {
     posts = await fetchLatestPosts();
   } catch (err) {
+    // Rethrow rather than returning — see the matching note in notifications.ts.
+    // A returned failure here is indistinguishable from "no new posts".
     logger.error({ err }, "News push: failed to fetch WordPress posts");
-    return;
+    throw err;
   }
 
   if (posts.length === 0) return;
