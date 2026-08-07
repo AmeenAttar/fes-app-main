@@ -12,8 +12,9 @@
         "resourceClass": "m-medium"
       },
       "channel": "development",
+      "environment": "development",
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "REPLACE_WITH_DEPLOYED_API_DOMAIN"
+        "EXPO_PUBLIC_DOMAIN": "fes-api.onrender.com"
       }
     },
     "preview": {
@@ -22,8 +23,9 @@
         "resourceClass": "m-medium"
       },
       "channel": "preview",
+      "environment": "preview",
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "REPLACE_WITH_DEPLOYED_API_DOMAIN"
+        "EXPO_PUBLIC_DOMAIN": "fes-api.onrender.com"
       }
     },
     "production": {
@@ -32,17 +34,18 @@
       },
       "channel": "production",
       "autoIncrement": true,
+      "environment": "production",
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "REPLACE_WITH_DEPLOYED_API_DOMAIN"
+        "EXPO_PUBLIC_DOMAIN": "fes-api.onrender.com"
       }
     }
   },
   "submit": {
     "production": {
       "ios": {
-        "appleId": "REPLACE_WITH_APPLE_ID",
-        "ascAppId": "REPLACE_WITH_ASC_APP_ID",
-        "appleTeamId": "REPLACE_WITH_APPLE_TEAM_ID"
+        "appleId": "cdudek@fesinstitute.org",
+        "ascAppId": "6799172719",
+        "appleTeamId": "P39U3HV6UJ"
       }
     }
   }

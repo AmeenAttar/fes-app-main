@@ -23,7 +23,7 @@ The app is **iOS-first**, portrait-only. Android is configured but not the prima
 - 2×3 grid of teal gradient tiles + a blue CTA bar at the bottom.
 - Each tile navigates to an internal screen or opens an external URL in an in-app browser sheet.
 - The hamburger icon (top right) opens a side navigation overlay (HamburgerMenu component).
-- The CTA bar ("Contact Cheryl Dudek") opens `mailto:cheryl.dudek@FEScenter.org`.
+- The CTA bar ("Contact Cheryl Dudek") opens `mailto:cdudek@fescenter.org`.
 
 ### 3. Investigators Directory
 - Fetches and scrapes the list of investigators from `fescenter.org/test/team/investigators/`.
