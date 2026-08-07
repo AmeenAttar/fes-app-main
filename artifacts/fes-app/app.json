@@ -26,7 +26,11 @@
       }
     },
     "android": {
-      "package": "org.fescenter.app"
+      "package": "org.fescenter.app",
+      "permissions": [
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR"
+      ]
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -75,6 +79,12 @@
         "projectId": "706ee23d-9f64-46e3-80b6-bb112cbfb6d2"
       }
     },
-    "owner": "ameen01"
+    "owner": "ameen01",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/706ee23d-9f64-46e3-80b6-bb112cbfb6d2"
+    }
   }
 }
