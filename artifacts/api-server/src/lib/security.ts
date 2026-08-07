@@ -55,6 +55,11 @@ export function requireApiToken(
   });
 }
 
+/** For routes that must refuse to run unauthenticated rather than fall open. */
+export function isApiTokenConfigured(): boolean {
+  return API_TOKEN.length > 0;
+}
+
 export function logSecurityConfig(): void {
   logger.info(
     {

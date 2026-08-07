@@ -1,0 +1,34 @@
+# Render blueprint for the API server.
+#
+# The free plan has no time limit, but it suspends the service after ~15 minutes
+# without a request. That is why INTERNAL_SCHEDULER is off here: timers do not
+# run in a suspended process. .github/workflows/scheduler.yml drives the jobs
+# instead, and its 10-minute ping doubles as the keep-alive.
+#
+# The database is deliberately NOT declared here. Render's free Postgres expires
+# after 30 days; use Neon (or Supabase) and paste its connection string into
+# DATABASE_URL below. See plan-files/handover-deployment.md.
+
+services:
+  - type: web
+    name: fes-api
+    runtime: node
+    plan: free
+    region: ohio
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @workspace/api-server run build
+    startCommand: pnpm --filter @workspace/api-server run start
+    healthCheckPath: /api/healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: INTERNAL_SCHEDULER
+        value: "off"
+      # Set these in the Render dashboard, not here — they are secrets.
+      - key: DATABASE_URL
+        sync: false
+      - key: API_AUTH_TOKEN
+        sync: false
+      - key: SENTRY_DSN
+        sync: false

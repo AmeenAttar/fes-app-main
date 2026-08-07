@@ -100,6 +100,21 @@ This document records significant architectural decisions, the alternatives that
 - `artifacts/api-server/src/lib/notifications.ts` — `startNotificationScheduler()`
 - `artifacts/api-server/src/index.ts` — calls `startNotificationScheduler()` at boot
 
+**Revised August 2026 — the schedule can now also come from outside.** The
+in-process timer holds only while the process stays alive, and every free
+hosting tier suspends a service after a few idle minutes. A suspended process
+fires no timers, so reminders would stop with nothing in the logs to show for
+it — exactly the silent-failure shape this project keeps running into.
+
+`runSchedulerOnce()` exposes a single pass, and `POST /api/tasks/run` triggers
+it over HTTP. `.github/workflows/scheduler.yml` calls that every 10 minutes,
+which both owns the cadence and keeps the service from idling. Set
+`INTERNAL_SCHEDULER=off` wherever the external cron is in charge; leaving it on
+is safe but duplicates work.
+
+The original rationale still holds for anything self-hosted or always-on — this
+is an added mode, not a replacement, and no queue or worker was introduced.
+
 **Do not change without reviewing:** If the server is scaled to multiple instances (e.g. multiple Replit replicas), each instance runs its own scheduler. The `sent_notifications` unique index prevents duplicate sends but does not prevent duplicate DB reads/writes. For more than 2 instances, move to a dedicated scheduler process.
 
 ---

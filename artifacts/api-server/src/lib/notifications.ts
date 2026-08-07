@@ -192,30 +192,60 @@ let newsTimer: NodeJS.Timeout | null = null;
 let eventsRunning = false;
 let newsRunning = false;
 
-async function runEventsTick(): Promise<void> {
-  if (eventsRunning) return;
+/** @returns false when skipped because the previous run is still going. */
+async function runEventsTick(): Promise<boolean> {
+  if (eventsRunning) return false;
   eventsRunning = true;
   try {
     await processOnce();
+    return true;
   } catch (err) {
     logger.error({ err }, "Scheduler tick failed");
     captureError(err, { job: "event-reminders" });
+    return true;
   } finally {
     eventsRunning = false;
   }
 }
 
-async function runNewsTick(): Promise<void> {
-  if (newsRunning) return;
+/** @returns false when skipped because the previous run is still going. */
+async function runNewsTick(): Promise<boolean> {
+  if (newsRunning) return false;
   newsRunning = true;
   try {
     await processNewsPushOnce();
+    return true;
   } catch (err) {
     logger.error({ err }, "News push tick failed");
     captureError(err, { job: "news-push" });
+    return true;
   } finally {
     newsRunning = false;
   }
+}
+
+/**
+ * One pass of both jobs, for callers that drive the schedule themselves.
+ *
+ * Free hosting tiers suspend an idle service, and a suspended process runs no
+ * timers — so on those hosts the in-process interval below silently stops
+ * delivering reminders. Exposing a single pass lets an external cron
+ * (see `.github/workflows/scheduler.yml`) own the cadence instead, which both
+ * makes delivery reliable and keeps the service from idling.
+ *
+ * Safe to run concurrently with the internal timer: event reminders dedupe on
+ * the `sent_notifications` unique index and news push advances a stored cursor,
+ * so a doubled run repeats work rather than re-notifying anyone.
+ */
+export async function runSchedulerOnce(): Promise<{
+  events: "ran" | "skipped";
+  news: "ran" | "skipped";
+}> {
+  const [events, news] = await Promise.all([runEventsTick(), runNewsTick()]);
+  return {
+    events: events ? "ran" : "skipped",
+    news: news ? "ran" : "skipped",
+  };
 }
 
 /** Stops both timers so the process can exit cleanly. */
@@ -227,9 +257,24 @@ export function stopNotificationScheduler(): void {
   started = false;
 }
 
+/**
+ * Set `INTERNAL_SCHEDULER=off` on hosts that suspend an idle service, and let
+ * an external cron drive `POST /api/tasks/run` instead. Left on, the timers and
+ * the endpoint coexist safely — they just duplicate work.
+ */
+const INTERNAL_SCHEDULER_ENABLED =
+  (process.env["INTERNAL_SCHEDULER"] ?? "on").trim().toLowerCase() !== "off";
+
 export function startNotificationScheduler(): void {
   if (started) return;
   started = true;
+
+  if (!INTERNAL_SCHEDULER_ENABLED) {
+    logger.info(
+      "Internal scheduler disabled; expecting external POST /api/tasks/run",
+    );
+    return;
+  }
 
   void runEventsTick();
   eventsTimer = setInterval(() => void runEventsTick(), POLL_INTERVAL_MS);

@@ -1,0 +1,71 @@
+name: Notification scheduler
+
+# The API server's own timers are unreliable on a free host: the service is
+# suspended after a few idle minutes, and a suspended process fires no timers,
+# so event reminders and news pushes would stop without any error to notice.
+# Driving the schedule from here fixes that and keeps the service warm.
+#
+# Required repository secrets:
+#   API_BASE_URL    e.g. https://fes-api.onrender.com  (no trailing slash)
+#   API_AUTH_TOKEN  same value the server is deployed with
+#
+# Note: GitHub delays scheduled runs under load, sometimes by 10+ minutes. That
+# is fine here — the reminder windows are hours wide, and the jobs are
+# idempotent, so a late or doubled run notifies nobody twice.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+# A slow run must not stack up behind the next tick.
+concurrency:
+  group: notification-scheduler
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger scheduler run
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          API_AUTH_TOKEN: ${{ secrets.API_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${API_BASE_URL:-}" ] || [ -z "${API_AUTH_TOKEN:-}" ]; then
+            echo "::error::API_BASE_URL and API_AUTH_TOKEN secrets must both be set."
+            exit 1
+          fi
+
+          # A suspended free-tier service takes ~30-60s to wake, so the first
+          # attempt often times out. Retry before calling it a failure.
+          for attempt in 1 2 3; do
+            echo "Attempt $attempt..."
+            status=$(curl --silent --show-error \
+              --output response.json \
+              --write-out '%{http_code}' \
+              --max-time 120 \
+              --request POST "${API_BASE_URL}/api/tasks/run" \
+              --header "Authorization: Bearer ${API_AUTH_TOKEN}" \
+              --header 'Content-Type: application/json' || echo "000")
+
+            if [ "$status" = "200" ]; then
+              echo "OK: $(cat response.json)"
+              exit 0
+            fi
+
+            echo "HTTP $status: $(cat response.json 2>/dev/null || true)"
+
+            # Misconfiguration will not fix itself on retry.
+            case "$status" in
+              401|503) exit 1 ;;
+            esac
+
+            if [ "$attempt" -lt 3 ]; then sleep 30; fi
+          done
+
+          echo "::error::Scheduler run failed after 3 attempts."
+          exit 1
