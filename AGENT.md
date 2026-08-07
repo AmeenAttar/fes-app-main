@@ -95,17 +95,22 @@ Templates are in `.env.example` in each package.
 | `PORT` | Yes | — | HTTP port (e.g. `8080`) |
 | `SESSION_SECRET` | Yes | — | Reserved for future session middleware |
 | `NODE_ENV` | No | `development` | Standard Node env |
-| `FESCENTER_BASE_URL` | No | `https://fescenter.org/test` | Base URL for FES Center website (no trailing slash). See URL Migration Checklist below. |
+| `FESCENTER_BASE_URL` | No | `https://fescenter.org` | Base URL for FES Center website (no trailing slash). The old `/test` tier is retired. |
+| `API_AUTH_TOKEN` | No | — | Shared secret guarding the push-token writes. Unset means not enforced. Mirror into the app as `EXPO_PUBLIC_API_TOKEN`. |
+| `ALLOWED_ORIGINS` | No | — | Comma-separated browser CORS allowlist. Native apps send no `Origin` and are unaffected. |
+| `SENTRY_DSN` | No | — | Error reporting. Unset means errors only reach stdout. |
+| `EQUIPMENT_REPO_SLUG` | No | `equipmentrepo` | Source page for the equipment catalog. |
+| `SUPPORTING_RESOURCES_SLUG` | No | `supporting-resources` | Source page for the contact list. |
 
-Planned but not yet implemented (see [`plan-files/handover-tech.md`](./plan-files/handover-tech.md)):
-`ADDEVENT_API_KEY` (Task #3), `GOOGLE_SHEETS_API_KEY`, `INVENTORY_SHEET_ID`,
-`INVENTORY_SHEET_NAME` (Task #4).
+There is no Google Sheets dependency — Equipment and Supporting Resources read
+from fescenter.org. See [`plan-files/handover-data-sources.md`](./plan-files/handover-data-sources.md).
 
 ### `artifacts/fes-app/.env`
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `EXPO_PUBLIC_DOMAIN` | Yes | — | API server URL. Local: `http://localhost:8080`. Prod: deployed domain. Used by `lib/api.ts`. |
+| `EXPO_PUBLIC_API_TOKEN` | If server enforces | — | Must match `API_AUTH_TOKEN`. Missing it means push registration 401s and notifications silently never work. |
 
 For EAS builds, the same variable is set in `eas.json` per profile.
 
@@ -116,16 +121,18 @@ For EAS builds, the same variable is set in `eas.json` per profile.
 | Route file | Screen | Status |
 |---|---|---|
 | `app/index.tsx` | Splash → redirects to `/menu` | Done |
-| `app/menu.tsx` | 6-tile grid + "Contact Cheryl Dudek" CTA | Done |
-| `app/investigators/index.tsx` | Searchable investigator list | Done |
-| `app/investigators/[slug].tsx` | Investigator detail | Done |
-| `app/events/index.tsx` | Upcoming events from iCal | Done |
-| `app/supporting-resources.tsx` | Static contact list | Done |
-| `app/equipment-inventory.tsx` | Stub — placeholder | Backlog #4 |
-| `app/tuesdays.tsx` | Stub — placeholder | Backlog (B-005) |
-| `app/news.tsx` | Not yet created | Backlog #2 |
+| `app/menu.tsx` | Home feed: news carousel, upcoming events, quick access | Done |
+| `app/news/index.tsx`, `[id].tsx` | News list + article | Done |
+| `app/investigators/index.tsx`, `[slug].tsx` | Directory (grid/list) + profile | Done |
+| `app/events/index.tsx`, `[id].tsx` | Events + detail with add-to-calendar | Done |
+| `app/equipment-inventory/index.tsx`, `[slug].tsx` | Catalog (grid/list) + item detail | Done |
+| `app/supporting-resources.tsx` | Contact list by section | Done |
+| `app/tuesdays.tsx` | First Tuesday sessions + speaker sign-up | Done |
+| `app/fes-calendar.tsx` | Month calendar view | Done |
+| `app/settings.tsx` | Push opt-out, theme, version | Done |
 
-Tile order in `constants/menu.ts` is rendered into rows `[0,1] [2,3] [4,5]`.
+No placeholder screens remain. The home screen is a scrolling feed, not the
+original tile grid; `constants/menu.ts` now drives the nav drawer.
 
 ---
 
@@ -136,12 +143,16 @@ Tile order in `constants/menu.ts` is rendered into rows `[0,1] [2,3] [4,5]`.
 | GET | `/api/healthz` | `routes/health.ts` | Liveness check |
 | GET | `/api/investigators` | `routes/investigators.ts` | Scrapes `${FESCENTER_BASE_URL}/team/investigators/`; cache 10 min |
 | GET | `/api/investigators/:slug` | `routes/investigators.ts` | Scrapes individual page; cache 10 min |
-| GET | `/api/events` | `routes/events.ts` | Public Google Calendar iCal feed; cache 5 min |
-| POST | `/api/push-tokens` | `routes/push.ts` | Upserts an Expo push token |
-| DELETE | `/api/push-tokens/:token` | `routes/push.ts` | Removes a token |
+| GET | `/api/events`, `/api/events/:id` | `routes/events.ts` | iCal feed; cache 5 min, disk-backed, serves stale on failure |
+| GET | `/api/news`, `/api/news/:id` | `routes/news.ts` | WP REST proxy; cache 5 min |
+| GET | `/api/equipment`, `/api/equipment/:slug` | `routes/equipment.ts` | Child pages of `/equipmentrepo/`; cache 10 min |
+| GET | `/api/supporting-resources` | `routes/supporting-resources.ts` | `<h3>` sections on `/supporting-resources/`; cache 10 min |
+| GET | `/api/weather` | `routes/weather.ts` | open-meteo forecast |
+| POST | `/api/push-tokens` | `routes/push.ts` | Upserts an Expo push token — **requires bearer token** |
+| DELETE | `/api/push-tokens/:token` | `routes/push.ts` | Removes a token — **requires bearer token** |
 
-CORS allows all origins (acceptable for an internal app; should tighten for
-production — see TD-009 in [`plan-files/handover-backlog.md`](./plan-files/handover-backlog.md)).
+CORS is restricted by `ALLOWED_ORIGINS` when set. Rate limiting, helmet, and a
+terminal JSON error handler are in place; no route leaks a stack trace.
 
 ---
 
@@ -210,44 +221,44 @@ Native changes require a new build.
 
 ---
 
-## 12. URL Migration Checklist
+## 12. Website URL Configuration
 
-The FES Center website will migrate from `https://fescenter.org/test` to
-`https://fescenter.org`. When that happens:
+The migration off the old `https://fescenter.org/test` tier is **complete** —
+that tier now 404s and `https://fescenter.org` is the default everywhere
+(`lib/config.ts`, `fes-app/lib/site.ts`, and both `.env.example` files).
 
-1. Update `FESCENTER_BASE_URL` in `artifacts/api-server/.env` (and the
-   production deployment's environment) to `https://fescenter.org`.
-2. Restart the api-server.
-3. Verify `GET /api/investigators` still returns a non-empty list.
-4. (Future) When `app/news.tsx` is built (Task #2), it will go through the
-   same `/api/news` proxy route which also reads `FESCENTER_BASE_URL` — no
-   client change required.
+`FESCENTER_BASE_URL` still exists to repoint the whole site if needed; the
+per-page slugs (`EQUIPMENT_REPO_SLUG`, `SUPPORTING_RESOURCES_SLUG`) cover
+individual pages being renamed.
 
-`fes-app/constants/menu.ts` still has a hardcoded `https://fescenter.org/blog/`
-external URL on the News tile. That tile will be replaced by an internal
-`/news` screen in Task #2 (see [`plan-files/handover-backlog.md`](./plan-files/handover-backlog.md))
-and the hardcoded URL deleted at that time.
-
-The Google Calendar iCal URL in `routes/events.ts` is `calendar.google.com`
-and is intentionally NOT derived from `FESCENTER_BASE_URL` — it is a public
-Google Calendar feed and is unaffected by the website migration.
+The Google Calendar iCal URL in `routes/events.ts` is `calendar.google.com` and
+is intentionally NOT derived from `FESCENTER_BASE_URL` — it is a public Google
+Calendar feed, unaffected by website changes.
 
 ---
 
 ## 13. Known Issues & Limitations
 
-Highlights (full list in [`plan-files/handover-backlog.md`](./plan-files/handover-backlog.md)):
-
-- Investigators scraper is regex-based against the website DOM and will
-  silently break if the FES Center website restructures (B-002).
-- `equipment-inventory.tsx` and `tuesdays.tsx` render placeholders only.
-- News tile opens an external browser; will become an internal screen (Task #2).
-- Notification scheduler timezone for all-day events is UTC; FES Center is
-  America/New_York (timezone bug for all-day reminders).
-- No API authentication; not HIPAA-compliant. Do not introduce PHI without a
-  full security review (see Decision 7 in [`plan-files/handover-decisions.md`](./plan-files/handover-decisions.md)).
-- `eas.json` and `app.json` still contain `REPLACE_WITH_*` placeholders that
-  must be filled before any TestFlight or App Store work.
+- **Content is scraped.** Investigators, equipment, and supporting resources are
+  parsed from the live website. The parsers read *shape* rather than fixed field
+  names precisely so routine edits don't break them (see
+  [`handover-data-sources.md`](./plan-files/handover-data-sources.md)), but a
+  wholesale redesign of those pages would. Zero-result parses are treated as
+  errors and reported to Sentry rather than silently returning empty.
+- **All 37 equipment images 404** — broken on the Center's own site, not ours.
+  The app falls back to branded placeholders.
+- **No user authentication; not HIPAA-compliant.** `API_AUTH_TOKEN` guards the
+  push-token writes, but the secret ships inside the binary, so it stops drive-by
+  abuse rather than a determined attacker. Do not introduce PHI without a full
+  security review (Decision 7 in
+  [`handover-decisions.md`](./plan-files/handover-decisions.md)).
+- **Google Calendar rate-limits the iCal feed per IP.** Repeated api-server
+  restarts trigger a 429; the events route serves a disk-backed stale copy when
+  that happens.
+- **`eas.json` still has `REPLACE_WITH_*` placeholders** — the deployed API
+  domain and the three Apple values. `app.json` is done.
+- **Expo Go can't receive push notifications** or show the app's real icon; both
+  need a development build on a real device.
 
 ---
 

@@ -120,7 +120,9 @@ External dependencies:
 | `FESCENTER_BASE_URL` | Base URL for FES Center website scraping (default: `https://fescenter.org/test`) |
 | `ADDEVENT_API_KEY` | AddEvent REST API v2 bearer token (Task #3) |
 
-**Google Sheets (implemented):** `GOOGLE_SHEETS_API_KEY`, `GOOGLE_SHEETS_SPREADSHEET_ID` / `INVENTORY_SHEET_ID`, `INVENTORY_SHEET_NAME` (default `Equipment`), `SUPPORTING_RESOURCES_SHEET_NAME` (default `Supporting Resources`). Full production steps: `handover-google-sheets-production.md`.
+**Content sources:** Equipment and Supporting Resources are read from fescenter.org, not a spreadsheet — no Google Sheets key is required. Optional overrides: `EQUIPMENT_REPO_SLUG` (default `equipmentrepo`), `SUPPORTING_RESOURCES_SLUG` (default `supporting-resources`). See `handover-data-sources.md`.
+
+**Security / ops:** `API_AUTH_TOKEN` (guards the push-token writes; mirror into the app as `EXPO_PUBLIC_API_TOKEN`), `ALLOWED_ORIGINS` (browser CORS allowlist; native apps send no Origin), `SENTRY_DSN` (error reporting; unset means errors only reach stdout).
 
 ### fes-app (Expo, set in eas.json or .env)
 

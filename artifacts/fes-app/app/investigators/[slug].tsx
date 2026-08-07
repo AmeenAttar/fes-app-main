@@ -71,6 +71,8 @@ export default function InvestigatorDetailScreen() {
         </Text>
         <Pressable
           onPress={() => refetch()}
+          accessibilityRole="button"
+          accessibilityLabel="Retry loading this profile"
           style={[
             styles.retryBtn,
             { backgroundColor: colors.primary, borderRadius: colors.radius },
@@ -156,6 +158,9 @@ export default function InvestigatorDetailScreen() {
 
       <Pressable
         onPress={openOnWeb}
+        accessibilityRole="button"
+        accessibilityLabel={`View this profile on ${FESCENTER_SITE_HOSTNAME}`}
+        accessibilityHint="Opens the website in an in-app browser"
         style={({ pressed }) => [
           styles.linkBtn,
           {

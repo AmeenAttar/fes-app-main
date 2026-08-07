@@ -246,6 +246,8 @@ export default function NewsArticleScreen() {
         </Text>
         <Pressable
           onPress={() => refetch()}
+          accessibilityRole="button"
+          accessibilityLabel="Retry loading this article"
           style={[
             styles.retryBtn,
             { backgroundColor: colors.primary, borderRadius: colors.radius },
@@ -303,6 +305,9 @@ export default function NewsArticleScreen() {
       >
         <Pressable
           onPress={() => openCanonical(data)}
+          accessibilityRole="button"
+          accessibilityLabel="Open this article on the website"
+          accessibilityHint="Opens the original page in an in-app browser"
           style={({ pressed }) => [
             styles.openOriginal,
             {
