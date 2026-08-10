@@ -1,11 +1,5 @@
-import { eq } from "drizzle-orm";
 
-import {
-  db,
-  newsPushStateTable,
-  NEWS_PUSH_STATE_KEY,
-  pushTokensTable,
-} from "@workspace/db";
+import { db, eq, NEWS_PUSH_STATE_KEY, newsPushStateTable, pushTokensTable } from "@workspace/db";
 
 import { WP_API_BASE_URL } from "./config";
 import { stripWordPressContent } from "./html";

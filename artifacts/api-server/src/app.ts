@@ -16,6 +16,18 @@ import { corsOptions } from "./lib/security";
 
 const app: Express = express();
 
+/**
+ * Render terminates TLS at its own proxy and forwards with `X-Forwarded-For`.
+ * Without this, `req.ip` is the proxy for every request, so the rate limiter
+ * below buckets the entire user base into a single counter — 120 requests per
+ * minute shared by everyone, rather than per client.
+ *
+ * `1`, not `true`: trusting every hop would let a caller spoof `X-Forwarded-For`
+ * and mint themselves an unlimited number of rate-limit buckets, which is worse
+ * than the problem being fixed. One hop is exactly what Render puts in front.
+ */
+app.set("trust proxy", 1);
+
 app.use(
   pinoHttp({
     logger,

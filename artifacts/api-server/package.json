@@ -14,7 +14,6 @@
   "dependencies": {
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
-    "cookie-parser": "^1.4.7",
     "cors": "^2",
     "drizzle-orm": "catalog:",
     "expo-server-sdk": "^6.1.0",
@@ -28,7 +27,6 @@
   },
   "devDependencies": {
     "@rollup/rollup-darwin-arm64": "^4.62.3",
-    "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "catalog:",

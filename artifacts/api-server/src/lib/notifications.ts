@@ -1,6 +1,5 @@
-import { inArray, lt } from "drizzle-orm";
 
-import { db, pushTokensTable, sentNotificationsTable } from "@workspace/db";
+import { db, inArray, lt, pushTokensTable, sentNotificationsTable } from "@workspace/db";
 
 import { loadEvents, type EventDto } from "../routes/events";
 import { NEWS_PUSH_POLL_INTERVAL_MS, processNewsPushOnce } from "./news-push";

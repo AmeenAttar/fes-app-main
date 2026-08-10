@@ -53,10 +53,11 @@ vi.mock("@workspace/db", () => ({
   },
   pushTokensTable: PUSH_TOKENS,
   sentNotificationsTable: SENT,
+  // Operators come from @workspace/db now; the mock tables carry no real
+  // columns, so these only need to be callable.
+  inArray: () => ({}),
+  lt: () => ({}),
 }));
-
-// The mock tables carry no real columns, so the operators only need to be callable.
-vi.mock("drizzle-orm", () => ({ inArray: () => ({}), lt: () => ({}) }));
 
 const sendToAllDevices = vi.fn();
 vi.mock("./push-delivery", () => ({

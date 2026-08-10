@@ -9,7 +9,13 @@ import {
   startNotificationScheduler,
   stopNotificationScheduler,
 } from "./lib/notifications";
-import { logSecurityConfig } from "./lib/security";
+import {
+  assertApiTokenConfiguredInProduction,
+  logSecurityConfig,
+} from "./lib/security";
+
+// Before listen: a misconfigured production server should not accept traffic.
+assertApiTokenConfiguredInProduction();
 
 const rawPort = process.env["PORT"];
 
