@@ -1,0 +1,80 @@
+name: CI
+
+# Until this existed, nothing checked a pull request and `main` deployed
+# straight to production on merge. Render redeploys on every push to `main`,
+# so a broken merge is a broken API — this is the only gate in front of that.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A newer push makes an in-flight run pointless. Not applied to `main`, where
+# every commit that deploys should have a recorded result.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      # Matches render.yaml's NODE_VERSION. If one moves, move the other.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install
+        # The repo's preinstall hook rejects non-pnpm agents, so this must stay pnpm.
+        run: pnpm install --frozen-lockfile
+
+      # lib/db is a composite project whose declarations the other packages
+      # type-check against. Without this they would check against nothing on a
+      # fresh clone, since lib/db/dist is gitignored.
+      - name: Build workspace type declarations
+        run: pnpm run typecheck:libs
+
+      - name: Typecheck api-server
+        run: pnpm --filter @workspace/api-server run typecheck
+
+      - name: Typecheck fes-app
+        run: pnpm --filter @workspace/fes-app run typecheck
+
+      - name: Test api-server
+        run: pnpm --filter @workspace/api-server run test
+
+      - name: Build api-server
+        run: pnpm --filter @workspace/api-server run build
+
+      # mockup-sandbox is deliberately excluded: it is a design sandbox that is
+      # never shipped and carries a pre-existing duplicate-React-types failure.
+      # Adding it here would make CI permanently red and therefore ignored.
+
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Advisory only. Almost every advisory in this repo lives in build tooling
+    # or the unshipped sandbox, so failing the build on them would train people
+    # to ignore a red X. This surfaces them without blocking.
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level high

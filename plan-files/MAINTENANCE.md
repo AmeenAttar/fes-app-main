@@ -222,13 +222,27 @@ a ticket says Expo accepted it, a **receipt** says Apple delivered it:
 - `POST https://exp.host/--/api/v2/push/send` → returns a ticket id
 - `POST https://exp.host/--/api/v2/push/getReceipts` with that id → `status: ok`
 
-### Monitoring you do not have
+### Automated monitoring
 
-There is **no uptime monitoring and no alerting**. If Render dies at 2am, you
-find out when someone mentions the app is broken. The cheapest fix is a free
-UptimeRobot check on `/api/healthz` with email alerts. Sentry is wired up but
-inert until `SENTRY_DSN` is set — if you set it, revisit the App Store privacy
-declaration, because crash data is a declarable category.
+`.github/workflows/uptime.yml` probes the API every 30 minutes and fails the
+workflow when something is wrong. GitHub emails the repository owner on a failed
+scheduled run, so a red run *is* the alert — no third-party monitoring account
+needed.
+
+It is deliberately separate from the scheduler workflow. That one only exercises
+`/api/tasks/run`; this one checks the read paths the app actually uses, and
+checks the database via the one endpoint that touches Postgres on every call.
+
+It also fails on a **200 with a suspiciously small body**, which is how a broken
+scraper presents: the endpoint is fine, the parser returned nothing, and the app
+shows a blank screen with no error anywhere.
+
+Two caveats. GitHub's scheduler drops ticks (see §6), so treat a missing run as
+uninformative rather than reassuring. And it cannot alert on something it does
+not probe — add a check when you add an endpoint that matters.
+
+Sentry is wired up but inert until `SENTRY_DSN` is set. If you set it, revisit
+the App Store privacy declaration: crash data is a declarable category.
 
 ---
 
@@ -286,12 +300,19 @@ The parsers have tests using captured HTML fixtures. **When the site changes,
 update the fixture first, watch the test fail, then fix the parser.** A parser
 fixed without a failing test is a parser you cannot trust.
 
-`events.ts` is the exception and the biggest liability: **542 lines, roughly
-twenty pure parsing functions, and no tests at all.** It handles iCal unfolding,
-HTML entity decoding, URL canonicalisation, action-link classification, and
-recurrence — and it feeds both the events screen and the reminder scheduler. It
-is the highest-value place to add coverage; the functions are pure and take
-strings, so tests are cheap.
+`events.ts` was the exception — 542 lines with no coverage — and now has 63
+tests over its eleven pure helpers, which are exported for that purpose and not
+for callers. Writing them surfaced three real bugs that had been shipping:
+
+| Bug | Effect |
+|---|---|
+| `\s+\n` collapsed newlines before the `\n{3,}` rule could run | Paragraph breaks stripped from every description; the rule below it was dead code |
+| `)` stripped before `,` in `trimUrlTail` | A URL written `(see https://x/a),` kept its closing paren |
+| `Date.parse("-5")` reads as the year 2001 | A malformed `Retry-After` produced a 0 ms cooldown — no back-off at all, right after a 429 asked us to slow down |
+
+None of them changed output for the current feed: running the fixed parser
+against the live calendar and diffing all 24 events against production gave zero
+differences. They are latent, which is exactly why they survived.
 
 Known upstream breakage, not ours to fix: all 37 equipment images 404 on
 `fescenter.org`. The app degrades to placeholders deliberately.
@@ -326,48 +347,53 @@ tolerate from your trigger, not to its nominal interval.
 
 Ordered by what I would fix first.
 
-**1. `events.ts` has no tests.** Biggest single risk. 542 lines of parsing
-feeding both events and reminders. Start with the pure string functions.
+**1. `weather.ts` and `news.ts` untested.** 228 and 271 lines. `news.ts` also
+feeds the news-push cursor, so a parsing change there can affect notifications,
+not just a screen.
 
-**2. No uptime monitoring or alerting.** You learn about outages from users.
+**2. Four unpatched advisories inside `express`.** `path-to-regexp`, `qs`, and
+`body-parser`, reachable via `express` 5.2.1 — already the latest published, so
+there is no upgrade to take. The `path-to-regexp` DoS needs sequential optional
+groups in a route pattern and none of ours have any. Recheck when Express
+releases.
 
-**3. `weather.ts` and `news.ts` untested.** 228 and 271 lines.
+**3. The undici override is a pin to watch.** `package.json` has
+`pnpm.overrides["undici@^7.0.0"] = ">=7.29.0 <8.0.0"`, because
+`expo-server-sdk@7.1.0` allows `^7.2.0` and pnpm otherwise settles on 7.25.0,
+which is vulnerable. Drop the override once expo-server-sdk raises its own
+floor — and keep the upper bound: unbounded, pnpm jumps to undici 8, which
+expo-server-sdk does not support.
 
-**4. Dependency advisories.** `pnpm audit` reports alarming totals, but almost
-all are build tooling (`@expo/cli`, `react-native`, `vitest`, `vite`) or
-`mockup-sandbox`, which is not shipped. What actually runs in production:
-`expo-server-sdk` 6.1.0 pulls a vulnerable `undici`; **7.1.0 is available** and
-is the one upgrade worth doing — it is a major bump, so check
-`sendPushNotificationsAsync`, `chunkPushNotifications`, and `isExpoPushToken`
-still behave, and `push-delivery.test.ts` covers all three. `express` is already
-at latest.
-
-**5. Disk cache is pointless on Render.** `events.ts` caches to `os.tmpdir()`,
+**4. Disk cache is pointless on Render.** `events.ts` caches to `os.tmpdir()`,
 which is wiped on every deploy and every wake from sleep. Harmless, but do not
 rely on it; the in-memory cache is what actually serves.
 
-**6. Stale config.** `app.json` still has
+**5. Stale config.** `app.json` still has
 `"expo-router": { "origin": "https://replit.com/" }` from the original template.
 Only affects server-rendered routes, which this app does not use.
 
-**7. Peer dependency mismatch.** `@tanstack/react-query-persist-client@5.101.4`
+**6. Peer dependency mismatch.** `@tanstack/react-query-persist-client@5.101.4`
 wants `@tanstack/react-query@^5.101.4`; the catalog pins `5.90.21`. Works today.
 
-**8. No accessibility labels** on `investigators/[slug]` and `news/[id]`.
+**7. No accessibility labels** on `investigators/[slug]` and `news/[id]`.
 
-**9. `mockup-sandbox` fails typecheck.** Pre-existing, unshipped. Do not include
+**8. `mockup-sandbox` fails typecheck.** Pre-existing, unshipped. Do not include
 it in CI; consider deleting it once the design is settled.
 
 ---
 
 ## 8. Things that will bite you
 
-**There is no CI.** Nothing runs tests on a pull request. Merging to `main`
-deploys straight to production. Adding a GitHub Actions workflow that runs
-`test`, `typecheck`, and `build` on PRs is an hour of work and the highest-value
-process improvement available.
+**`main` is production.** No staging. Render redeploys on every push to `main`,
+so `.github/workflows/ci.yml` is the only gate in front of a live API. It runs
+typecheck, tests, and build on every pull request and every push to `main`.
 
-**`main` is production.** No staging.
+`mockup-sandbox` is deliberately excluded from CI. It is unshipped and carries a
+pre-existing duplicate-React-types failure; including it would make CI
+permanently red, and a permanently red CI is one nobody reads.
+
+The audit job is `continue-on-error` for the same reason — almost every advisory
+lives in build tooling, so failing on them would train people to ignore the X.
 
 **The App Store privacy declaration must match the generated privacy manifest.**
 Expo generates that manifest from **installed** native modules, not imported

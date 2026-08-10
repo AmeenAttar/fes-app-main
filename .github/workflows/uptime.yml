@@ -1,0 +1,102 @@
+name: Uptime
+
+# Before this, an outage was discovered by a person opening the app.
+#
+# Deliberately independent of the scheduler workflow: that one triggers
+# /api/tasks/run, so it can only tell you the endpoint it drives is broken.
+# This checks read paths the app actually depends on, and it checks the
+# database, which no unauthenticated endpoint otherwise exercises.
+#
+# GitHub emails the repository owner when a scheduled workflow fails, so a red
+# run here is the alert. No third-party monitoring account required.
+
+on:
+  schedule:
+    # Every 30 minutes, offset off the hour — GitHub sheds scheduled load
+    # hardest at :00 and on round intervals. A missed check is cheap here;
+    # this is a smoke alarm, not a metrics pipeline.
+    - cron: "13,43 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Probe public endpoints
+        env:
+          BASE: ${{ secrets.API_BASE_URL }}
+        run: |
+          set -uo pipefail
+          if [ -z "${BASE:-}" ]; then
+            echo "::error::API_BASE_URL secret is not set."
+            exit 1
+          fi
+          BASE="${BASE%/}"
+          fail=0
+
+          # Render suspends the free service after ~15 idle minutes and takes
+          # 30-60s to wake. A long first response is normal, not an outage, so
+          # the timeout is generous and the duration is reported rather than
+          # judged.
+          probe() {
+            local path="$1" want_min="$2"
+            local body_file; body_file="$(mktemp)"
+            local out
+            out=$(curl -s -m 120 -o "$body_file" -w '%{http_code} %{time_total}' "$BASE$path" || echo "000 0")
+            local code="${out%% *}" secs="${out##* }"
+            local size; size=$(wc -c < "$body_file" | tr -d ' ')
+            rm -f "$body_file"
+
+            if [ "$code" != "200" ]; then
+              echo "::error::$path returned HTTP $code after ${secs}s"
+              fail=1
+              return
+            fi
+            # A 200 with an empty or truncated body means a scraper broke
+            # upstream — the exact failure that otherwise shows up as a blank
+            # screen and no error anywhere.
+            if [ "$size" -lt "$want_min" ]; then
+              echo "::error::$path returned HTTP 200 but only ${size} bytes (expected >= ${want_min}); a parser may have broken"
+              fail=1
+              return
+            fi
+            echo "ok  $path  ${code}  ${secs}s  ${size} bytes"
+          }
+
+          probe /api/healthz 2
+          probe /api/news 200
+          probe /api/events 200
+          probe /api/investigators 200
+
+          exit $fail
+
+      - name: Probe an authenticated, database-backed endpoint
+        env:
+          BASE: ${{ secrets.API_BASE_URL }}
+          TOKEN: ${{ secrets.API_AUTH_TOKEN }}
+        run: |
+          set -uo pipefail
+          BASE="${BASE%/}"
+          # /api/tasks/run is the only endpoint that touches Postgres on every
+          # call, so it is what proves Render can still reach Neon. It returns
+          # 500 when either job failed, which is the signal worth alerting on.
+          out=$(curl -s -m 180 -w '\n%{http_code}' -X POST "$BASE/api/tasks/run" \
+                 -H "Authorization: Bearer $TOKEN" || echo $'\n000')
+          code=$(printf '%s' "$out" | tail -n1)
+          body=$(printf '%s' "$out" | sed '$d')
+          echo "HTTP $code — $body"
+
+          case "$code" in
+            200) echo "database path healthy" ;;
+            401) echo "::error::API_AUTH_TOKEN is out of sync between this repo and Render." ; exit 1 ;;
+            *)   echo "::error::tasks/run returned HTTP $code — a scheduler job failed or the database is unreachable." ; exit 1 ;;
+          esac

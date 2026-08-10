@@ -105,12 +105,28 @@ let inFlight: Promise<EventsResult> | null = null;
 /** Epoch ms before which we must not call the upstream again (429 back-off). */
 let cooldownUntil = 0;
 
+/*
+ * The helpers below are exported for tests, not for callers. They are the
+ * fragile surface of this file: every one of them turns text produced by
+ * Google Calendar or a human typing into a description field into something
+ * the app relies on. When the feed's shape changes, these are what break, and
+ * they break quietly — an event keeps rendering, just without its RSVP button.
+ */
+
 /** Retry-After is either delta-seconds or an HTTP date. */
-function parseRetryAfterMs(header: string | null): number | null {
+export function parseRetryAfterMs(header: string | null): number | null {
   if (!header) return null;
-  const seconds = Number(header.trim());
+  const trimmed = header.trim();
+  const seconds = Number(trimmed);
   if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
-  const when = Date.parse(header);
+
+  // A numeric-but-invalid value must not fall through to Date.parse, which
+  // happily reads "-5" as the year 2001 and returns a past date — clamped to a
+  // 0 ms cooldown, i.e. no back-off at all, immediately after the 429 that
+  // asked us to slow down.
+  if (trimmed !== "" && Number.isFinite(seconds)) return null;
+
+  const when = Date.parse(trimmed);
   if (Number.isFinite(when)) {
     const delta = when - Date.now();
     return delta > 0 ? delta : 0;
@@ -118,7 +134,7 @@ function parseRetryAfterMs(header: string | null): number | null {
   return null;
 }
 
-function htmlToText(s: string | undefined | null): string | null {
+export function htmlToText(s: string | undefined | null): string | null {
   if (!s) return null;
   return s
     .replace(/<[^>]+>/g, "")
@@ -128,12 +144,15 @@ function htmlToText(s: string | undefined | null): string | null {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, "\"")
     .replace(/&#39;/g, "'")
-    .replace(/\s+\n/g, "\n")
+    // Trailing spaces before a newline only — `\s+\n` would swallow the
+    // newlines themselves, collapsing every blank line and making the
+    // paragraph-preserving rule below unreachable.
+    .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim() || null;
 }
 
-function decodeBasicHtmlEntities(s: string): string {
+export function decodeBasicHtmlEntities(s: string): string {
   return s
     .replace(/&amp;/gi, "&")
     .replace(/&#38;/gi, "&")
@@ -147,7 +166,7 @@ function decodeBasicHtmlEntities(s: string): string {
 }
 
 /** RFC 5545: unfold content lines (newline + single space/tab continuation). */
-function unfoldIcsText(s: string): string {
+export function unfoldIcsText(s: string): string {
   return s.replace(/\r?\n[ \t]/g, "");
 }
 
@@ -155,7 +174,7 @@ function unfoldIcsText(s: string): string {
  * Google Calendar HTML often inserts <wbr> inside long URLs; ICS may still contain
  * folded lines. Normalize before regex — otherwise "addevent.<wbr />com" never matches.
  */
-function normalizeCalendarHtmlForUrlExtract(s: string): string {
+export function normalizeCalendarHtmlForUrlExtract(s: string): string {
   let t = decodeBasicHtmlEntities(s);
   t = unfoldIcsText(t);
   t = t.replace(/<wbr\s*\/?>/gi, "");
@@ -165,14 +184,17 @@ function normalizeCalendarHtmlForUrlExtract(s: string): string {
 }
 
 /** Strip wrapping punctuation from the end of a URL fragment (plain text URLs). */
-function trimUrlTail(s: string): string {
-  return s.trim().replace(/\)+$/u, "").replace(/[.,;:]+$/u, "").trim();
+export function trimUrlTail(s: string): string {
+  // One combined class, not two passes: stripping ")" first and "," second
+  // leaves the paren on "…/a)," because the comma was in the way. Prose puts
+  // these in any order, so strip them in any order.
+  return s.trim().replace(/[).,;:\]]+$/u, "").trim();
 }
 
 /**
  * Canonicalize http(s) URL or scheme-less evt.to / addevent.com hosts.
  */
-function canonicalizeHttpUrl(candidate: string): string | null {
+export function canonicalizeHttpUrl(candidate: string): string | null {
   let raw = trimUrlTail(candidate);
   if (!raw) return null;
 
@@ -197,7 +219,7 @@ function canonicalizeHttpUrl(candidate: string): string | null {
   }
 }
 
-function classifyActionLink(host: string, pathname: string): ActionLinkKind {
+export function classifyActionLink(host: string, pathname: string): ActionLinkKind {
   const h = host.toLowerCase();
   const p = pathname.toLowerCase();
   if (h === "evt.to" || h === "www.evt.to" || h.endsWith(".addevent.com") || h === "addevent.com") {
@@ -220,7 +242,7 @@ const KIND_RANK: Record<ActionLinkKind, number> = {
 };
 
 /** Drop bare `evt.to/` RSVP when the description also has `evt.to/<slug>`. */
-function pruneBareEvtRootWhenSlugPresent(
+export function pruneBareEvtRootWhenSlugPresent(
   links: EventActionLink[],
 ): EventActionLink[] {
   const evtHosts = new Set(["evt.to", "www.evt.to"]);
@@ -259,7 +281,7 @@ function pruneBareEvtRootWhenSlugPresent(
 }
 
 /** Collect deduped, classified http(s) links from normalized HTML/description text. */
-function extractDescriptionLinks(normalizedBlob: string): EventActionLink[] {
+export function extractDescriptionLinks(normalizedBlob: string): EventActionLink[] {
   const seen = new Map<string, EventActionLink>();
 
   const tryAdd = (rawFragment: string) => {
@@ -310,7 +332,7 @@ function extractDescriptionLinks(normalizedBlob: string): EventActionLink[] {
   return pruned.slice(0, MAX_ACTION_LINKS);
 }
 
-function buildEventDto(input: {
+export function buildEventDto(input: {
   id: string;
   uid: string;
   title: string;
