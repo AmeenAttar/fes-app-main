@@ -143,6 +143,9 @@ export default function EquipmentDetailScreen() {
     >
       {data.imageUrl && !imageFailed ? (
         <Image
+          accessible
+          accessibilityRole="image"
+          accessibilityLabel={`Photograph of ${data.name}`}
           source={{ uri: data.imageUrl }}
           style={[
             styles.hero,

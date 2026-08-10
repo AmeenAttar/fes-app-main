@@ -273,6 +273,9 @@ function NewsCard({ item, onPress }: NewsCardProps) {
           source={{ uri: item.featuredImageUrl }}
           style={styles.hero}
           contentFit="cover"
+          accessible
+          accessibilityRole="image"
+          accessibilityLabel={`Featured image for ${item.title}`}
           transition={150}
         />
       ) : (

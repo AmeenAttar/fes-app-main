@@ -228,6 +228,9 @@ function InvestigatorListRow({
             source={{ uri: item.photoUrl }}
             style={styles.avatarImg}
             contentFit="cover"
+            accessible
+            accessibilityRole="image"
+            accessibilityLabel={`Photograph of ${item.name}`}
             transition={120}
           />
         ) : (
@@ -278,6 +281,9 @@ function InvestigatorGridCard({
           source={{ uri: item.photoUrl }}
           style={[styles.cardPhoto, { backgroundColor: colors.muted }]}
           contentFit="cover"
+          accessible
+          accessibilityRole="image"
+          accessibilityLabel={`Photograph of ${item.name}`}
           transition={150}
         />
       ) : (

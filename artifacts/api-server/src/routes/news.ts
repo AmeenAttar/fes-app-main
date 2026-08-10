@@ -89,7 +89,13 @@ interface DetailCacheEntry {
 
 const detailCache = new Map<number, DetailCacheEntry>();
 
-function toArticleResponse(post: WpPost): NewsArticleResponse {
+/*
+ * Exported for tests. These shape WordPress's REST payload into what the app
+ * lists and renders; `toNewsItem` in particular also decides what a push
+ * notification says, so a change here reaches notifications, not just a screen.
+ */
+
+export function toArticleResponse(post: WpPost): NewsArticleResponse {
   const rawHtml = stripShortcodes(post.content?.rendered ?? "");
   return {
     id: post.id,
@@ -103,26 +109,26 @@ function toArticleResponse(post: WpPost): NewsArticleResponse {
   };
 }
 
-function clampPerPage(raw: unknown): number {
+export function clampPerPage(raw: unknown): number {
   const n = Number(raw);
   if (!Number.isFinite(n) || n <= 0) return DEFAULT_PER_PAGE;
   return Math.min(Math.floor(n), MAX_PER_PAGE);
 }
 
-function clampPage(raw: unknown): number {
+export function clampPage(raw: unknown): number {
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 1) return 1;
   return Math.floor(n);
 }
 
-function pickFeaturedImage(media: WpFeaturedMedia[] | undefined): string | null {
+export function pickFeaturedImage(media: WpFeaturedMedia[] | undefined): string | null {
   if (!media || media.length === 0) return null;
   const first = media[0];
   if (!first || first.code) return null;
   return typeof first.source_url === "string" ? first.source_url : null;
 }
 
-function pickCategoryNames(
+export function pickCategoryNames(
   termGroups: WpEmbeddedTerm[][] | undefined,
 ): string[] {
   if (!termGroups) return [];
@@ -137,7 +143,7 @@ function pickCategoryNames(
   return names;
 }
 
-function toNewsItem(post: WpPost): NewsItem {
+export function toNewsItem(post: WpPost): NewsItem {
   return {
     id: post.id,
     title: stripWordPressContent(post.title?.rendered ?? ""),
