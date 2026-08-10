@@ -157,10 +157,19 @@ function TabItem({
       }`}
     >
       <div className={`w-6 h-6 flex items-center justify-center ${isActive ? "[&>svg]:fill-[#00b2a9]" : ""}`}>
-        {React.cloneElement(icon as React.ReactElement, {
-          strokeWidth: isActive ? 2.5 : 2,
-          className: "w-6 h-6",
-        })}
+        {React.cloneElement(
+          // `ReactNode` widens the element's props to `unknown`, so cloneElement
+          // rejects the icon props below. The icons here are always Lucide SVG
+          // components, which accept both.
+          icon as React.ReactElement<{
+            strokeWidth?: number;
+            className?: string;
+          }>,
+          {
+            strokeWidth: isActive ? 2.5 : 2,
+            className: "w-6 h-6",
+          },
+        )}
       </div>
       <span className={`text-[10px] ${isActive ? "font-bold" : "font-medium"}`}>
         {label}
