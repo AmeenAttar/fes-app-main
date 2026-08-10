@@ -48,7 +48,7 @@ See §5.
 | `artifacts/api-server` | Express API. ~3,750 lines. The scrapers live here. |
 | `artifacts/fes-app` | Expo / React Native app. ~9,500 lines. |
 | `lib/db` | Drizzle schema. Three tables, ~90 lines. |
-| `artifacts/mockup-sandbox` | Design explorations. **Not shipped.** Fails typecheck; ignore it. |
+| `artifacts/mockup-sandbox` | Design explorations. **Not shipped**, but typechecked in CI so it does not rot. |
 | `plan-files` | These documents. |
 
 ### Hosting
@@ -90,8 +90,10 @@ which regenerates them.
 `lib/db/dist` is gitignored, so a fresh clone has no declarations at all until
 something builds them.
 
-Expect `mockup-sandbox` to fail this. It is a design sandbox, not shipped, and
-carries a pre-existing duplicate-React-types error. Everything else must pass.
+Everything must pass, including `mockup-sandbox`. Its long-standing
+duplicate-React-types failure was a pnpm resolution artefact — two copies of
+`@types/react` in one compilation — and is fixed by the `@types/react` pin in
+the root `pnpm.overrides`.
 
 ### Shipping app changes
 
@@ -363,8 +365,13 @@ there is no upgrade to take. The `path-to-regexp` DoS needs sequential optional
 groups in a route pattern and none of ours have any. Recheck when Express
 releases.
 
-**2. The undici override is a pin to watch.** `package.json` has
-`pnpm.overrides["undici@^7.0.0"] = ">=7.29.0 <8.0.0"`, because
+**2. Three pins to watch in `pnpm.overrides`.** `@types/react` and
+`@types/react-dom` are pinned to the versions `fes-app` resolves, which is what
+collapsed the duplicate-React-types failure in `mockup-sandbox`. Revisit when
+Expo's SDK moves its React types forward — the pin should follow `fes-app`, not
+lead it.
+
+`undici@^7.0.0` is pinned to `>=7.29.0 <8.0.0`, because
 `expo-server-sdk@7.1.0` allows `^7.2.0` and pnpm otherwise settles on 7.25.0,
 which is vulnerable. Drop the override once expo-server-sdk raises its own
 floor — and keep the upper bound: unbounded, pnpm jumps to undici 8, which
@@ -374,17 +381,12 @@ expo-server-sdk does not support.
 which is wiped on every deploy and every wake from sleep. Harmless, but do not
 rely on it; the in-memory cache is what actually serves.
 
-**4. Route coverage is helper-level, not HTTP-level.** Every route's parsing
-helpers are tested, but no test drives an actual Express request through
-`app.ts` — so status codes, query validation, caching behaviour and the error
-envelope are unverified. Supertest against `app` would close this.
-
-**5. `mockup-sandbox` fails typecheck.** Pre-existing, unshipped, excluded from
-CI. Consider deleting it once the design is settled.
-
-**6. `esbuild-plugin-pino` pins a stale esbuild range.** It wants
-`>=0.25.0 <=0.25.8`; the workspace has 0.27.3. The build works — this is a peer
-warning, not a failure.
+**4. Scraper routes have no HTTP-level tests.** `app.test.ts` covers the
+middleware stack, auth, the error envelope and `/api/tasks/run`, but the
+scraping routes (`/api/news`, `/api/events`, `/api/investigators`,
+`/api/equipment`, `/api/weather`) are only covered at the helper level. Testing
+them through Express means stubbing `fetch`, which is worth doing but was not
+needed to close the gap that mattered — the middleware stack.
 
 ---
 
@@ -394,11 +396,7 @@ warning, not a failure.
 so `.github/workflows/ci.yml` is the only gate in front of a live API. It runs
 typecheck, tests, and build on every pull request and every push to `main`.
 
-`mockup-sandbox` is deliberately excluded from CI. It is unshipped and carries a
-pre-existing duplicate-React-types failure; including it would make CI
-permanently red, and a permanently red CI is one nobody reads.
-
-The audit job is `continue-on-error` for the same reason — almost every advisory
+The audit job is `continue-on-error` — almost every advisory
 lives in build tooling, so failing on them would train people to ignore the X.
 
 **The App Store privacy declaration must match the generated privacy manifest.**

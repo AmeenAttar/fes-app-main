@@ -56,9 +56,12 @@ jobs:
       - name: Build api-server
         run: pnpm --filter @workspace/api-server run build
 
-      # mockup-sandbox is deliberately excluded: it is a design sandbox that is
-      # never shipped and carries a pre-existing duplicate-React-types failure.
-      # Adding it here would make CI permanently red and therefore ignored.
+      # mockup-sandbox is unshipped, but it typechecks as of 2026-08-10 and a
+      # package nobody checks is a package that quietly rots. Its long-standing
+      # duplicate-React-types failure was a pnpm resolution artefact, fixed by
+      # pinning one @types/react in the root overrides.
+      - name: Typecheck mockup-sandbox
+        run: pnpm --filter @workspace/mockup-sandbox run typecheck
 
   audit:
     runs-on: ubuntu-latest

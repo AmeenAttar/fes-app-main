@@ -93,6 +93,31 @@ app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
     return;
   }
 
+  /**
+   * Body-parser rejections — a payload over the 64kb limit, or malformed JSON —
+   * arrive here carrying their own 4xx status. Falling through to 500 would
+   * blame the server for the client's mistake, and now that a monitor watches
+   * for 5xx and Sentry captures them, it would also manufacture alerts out of
+   * someone sending a bad request.
+   *
+   * Only 4xx is honoured. An upstream library reporting 5xx gets the generic
+   * treatment below, because that genuinely is our problem.
+   */
+  const status = (err as { status?: unknown; statusCode?: unknown })?.status ??
+    (err as { statusCode?: unknown })?.statusCode;
+  if (typeof status === "number" && status >= 400 && status < 500) {
+    const code =
+      typeof (err as { type?: unknown }).type === "string"
+        ? (err as { type: string }).type
+        : "bad_request";
+    req.log?.warn({ err, status }, "Rejected malformed request");
+    res.status(status).json({
+      error: code,
+      message: "The request could not be processed as sent.",
+    });
+    return;
+  }
+
   req.log?.error({ err }, "Unhandled error");
   captureError(err, { path: req.path, method: req.method });
   res.status(500).json({
