@@ -300,6 +300,16 @@ The parsers have tests using captured HTML fixtures. **When the site changes,
 update the fixture first, watch the test fail, then fix the parser.** A parser
 fixed without a failing test is a parser you cannot trust.
 
+`news.ts` deserves extra care: `toNewsItem` decides what the list shows *and*
+what a push notification says, so a regression there reaches lock screens, not
+just a screen someone chose to open.
+
+`stripDangerousMarkup` in `lib/html.ts` is the last point at which executable
+markup leaves the server, because the article body renders in a WebView with
+JavaScript enabled and nothing on the client sanitises it. It is a hedge, not a
+sanitiser — regexes cannot parse HTML. Do not extend the app to render HTML from
+anywhere other than the Center's own WordPress without replacing it properly.
+
 `events.ts` was the exception — 542 lines with no coverage — and now has 63
 tests over its eleven pure helpers, which are exported for that purpose and not
 for callers. Writing them surfaced three real bugs that had been shipping:
@@ -347,38 +357,34 @@ tolerate from your trigger, not to its nominal interval.
 
 Ordered by what I would fix first.
 
-**1. `weather.ts` and `news.ts` untested.** 228 and 271 lines. `news.ts` also
-feeds the news-push cursor, so a parsing change there can affect notifications,
-not just a screen.
-
-**2. Four unpatched advisories inside `express`.** `path-to-regexp`, `qs`, and
+**1. Four unpatched advisories inside `express`.** `path-to-regexp`, `qs`, and
 `body-parser`, reachable via `express` 5.2.1 — already the latest published, so
 there is no upgrade to take. The `path-to-regexp` DoS needs sequential optional
 groups in a route pattern and none of ours have any. Recheck when Express
 releases.
 
-**3. The undici override is a pin to watch.** `package.json` has
+**2. The undici override is a pin to watch.** `package.json` has
 `pnpm.overrides["undici@^7.0.0"] = ">=7.29.0 <8.0.0"`, because
 `expo-server-sdk@7.1.0` allows `^7.2.0` and pnpm otherwise settles on 7.25.0,
 which is vulnerable. Drop the override once expo-server-sdk raises its own
 floor — and keep the upper bound: unbounded, pnpm jumps to undici 8, which
 expo-server-sdk does not support.
 
-**4. Disk cache is pointless on Render.** `events.ts` caches to `os.tmpdir()`,
+**3. Disk cache is pointless on Render.** `events.ts` caches to `os.tmpdir()`,
 which is wiped on every deploy and every wake from sleep. Harmless, but do not
 rely on it; the in-memory cache is what actually serves.
 
-**5. Stale config.** `app.json` still has
-`"expo-router": { "origin": "https://replit.com/" }` from the original template.
-Only affects server-rendered routes, which this app does not use.
+**4. Route coverage is helper-level, not HTTP-level.** Every route's parsing
+helpers are tested, but no test drives an actual Express request through
+`app.ts` — so status codes, query validation, caching behaviour and the error
+envelope are unverified. Supertest against `app` would close this.
 
-**6. Peer dependency mismatch.** `@tanstack/react-query-persist-client@5.101.4`
-wants `@tanstack/react-query@^5.101.4`; the catalog pins `5.90.21`. Works today.
+**5. `mockup-sandbox` fails typecheck.** Pre-existing, unshipped, excluded from
+CI. Consider deleting it once the design is settled.
 
-**7. No accessibility labels** on `investigators/[slug]` and `news/[id]`.
-
-**8. `mockup-sandbox` fails typecheck.** Pre-existing, unshipped. Do not include
-it in CI; consider deleting it once the design is settled.
+**6. `esbuild-plugin-pino` pins a stale esbuild range.** It wants
+`>=0.25.0 <=0.25.8`; the workspace has 0.27.3. The build works — this is a peer
+warning, not a failure.
 
 ---
 
