@@ -169,7 +169,13 @@ export default function MenuScreen() {
             accessibilityLabel={`Visit the Cleveland FES Center website at ${FESCENTER_SITE_HOSTNAME}`}
             style={({ pressed }) => [styles.logoBtn, pressed && { opacity: 0.6 }]}
           >
-            <Image source={LOGO} style={styles.logo} contentFit="contain" />
+            <Image
+              source={LOGO}
+              style={styles.logo}
+              contentFit="contain"
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+            />
           </Pressable>
         </View>
         <View style={styles.headerSide}>
@@ -469,6 +475,9 @@ function NewsCard({ item, width }: { item: NewsItem; width: number }) {
             source={item.featuredImageUrl}
             style={StyleSheet.absoluteFillObject}
             contentFit="cover"
+            accessible
+            accessibilityRole="image"
+            accessibilityLabel={`Image for ${item.title}`}
             transition={200}
           />
         ) : (

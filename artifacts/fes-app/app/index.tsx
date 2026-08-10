@@ -59,7 +59,13 @@ export default function SplashRoute() {
           { opacity, transform: [{ scale }] },
         ]}
       >
-        <Image source={LOGO} style={styles.logo} contentFit="contain" />
+        <Image
+          source={LOGO}
+          style={styles.logo}
+          contentFit="contain"
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+        />
       </Animated.View>
     </View>
   );

@@ -1,9 +1,8 @@
 import { Router } from "express";
 import { z } from "zod/v4";
-import { eq, sql } from "drizzle-orm";
 import { Expo } from "expo-server-sdk";
 
-import { db, pushTokensTable } from "@workspace/db";
+import { db, eq, pushTokensTable, sql } from "@workspace/db";
 import { requireApiToken } from "../lib/security";
 
 const router = Router();

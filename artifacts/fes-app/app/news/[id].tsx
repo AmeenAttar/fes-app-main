@@ -284,6 +284,9 @@ export default function NewsArticleScreen() {
           source={{ uri: data.featuredImageUrl }}
           style={styles.hero}
           contentFit="cover"
+          accessible
+          accessibilityRole="image"
+          accessibilityLabel={`Featured image for ${data.title}`}
         />
       ) : null}
 

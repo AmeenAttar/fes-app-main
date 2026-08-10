@@ -1,7 +1,6 @@
 import { Expo, type ExpoPushMessage, type ExpoPushTicket } from "expo-server-sdk";
-import { eq } from "drizzle-orm";
 
-import { db, pushTokensTable, type PushToken } from "@workspace/db";
+import { db, eq, pushTokensTable, type PushToken } from "@workspace/db";
 
 import { logger } from "./logger";
 
@@ -25,20 +24,38 @@ export async function sendToAllDevices(
   }));
 
   const chunks = expo.chunkPushNotifications(messages);
-  const tickets: ExpoPushTicket[] = [];
+
+  /**
+   * Tickets are paired with their token as each chunk returns, rather than
+   * accumulated into one array and matched back by index afterwards.
+   *
+   * A chunk that throws contributes no tickets, so an index-based pairing
+   * silently shifts every later ticket onto the wrong token — and the only
+   * thing this loop does with a ticket is delete the token it believes is
+   * unregistered. That deletes a working device and keeps the dead one.
+   * Harmless while everyone fits in one chunk (100 messages); wrong the moment
+   * there are two and the first fails.
+   */
+  const results: Array<{ ticket: ExpoPushTicket; token: string }> = [];
+  let offset = 0;
   for (const chunk of chunks) {
+    const chunkTokens = validTokens.slice(offset, offset + chunk.length);
+    offset += chunk.length;
     try {
-      const result = await expo.sendPushNotificationsAsync(chunk);
-      tickets.push(...result);
+      const chunkTickets = await expo.sendPushNotificationsAsync(chunk);
+      chunkTickets.forEach((ticket, i) => {
+        const token = chunkTokens[i];
+        if (token) results.push({ ticket, token });
+      });
     } catch (err) {
-      logger.error({ err }, "Failed to send push chunk");
+      logger.error(
+        { err, chunkSize: chunk.length },
+        "Failed to send push chunk",
+      );
     }
   }
 
-  for (let i = 0; i < tickets.length; i += 1) {
-    const ticket = tickets[i];
-    const tok = validTokens[i];
-    if (!ticket || !tok) continue;
+  for (const { ticket, token: tok } of results) {
     if (ticket.status === "error") {
       const code = ticket.details?.error;
       if (code === "DeviceNotRegistered") {

@@ -89,3 +89,45 @@ describe("requireApiToken", () => {
     expect(isApiTokenConfigured()).toBe(false);
   });
 });
+
+/**
+ * Falling open is fine in development and unacceptable in production: a
+ * deploy that loses API_AUTH_TOKEN would accept unauthenticated writes to
+ * push_tokens and log nothing unusual. Booting is where that gets caught.
+ */
+describe("assertApiTokenConfiguredInProduction", () => {
+  const originalNodeEnv = process.env["NODE_ENV"];
+  afterEach(() => {
+    if (originalNodeEnv === undefined) delete process.env["NODE_ENV"];
+    else process.env["NODE_ENV"] = originalNodeEnv;
+  });
+
+  it("throws when production has no token", async () => {
+    process.env["NODE_ENV"] = "production";
+    const { assertApiTokenConfiguredInProduction } =
+      await loadSecurity(undefined);
+    expect(() => assertApiTokenConfiguredInProduction()).toThrow(
+      /API_AUTH_TOKEN is required in production/u,
+    );
+  });
+
+  it("throws when production has only a blank token", async () => {
+    process.env["NODE_ENV"] = "production";
+    const { assertApiTokenConfiguredInProduction } = await loadSecurity("   ");
+    expect(() => assertApiTokenConfiguredInProduction()).toThrow();
+  });
+
+  it("passes when production has a token", async () => {
+    process.env["NODE_ENV"] = "production";
+    const { assertApiTokenConfiguredInProduction } =
+      await loadSecurity("s3cret");
+    expect(() => assertApiTokenConfiguredInProduction()).not.toThrow();
+  });
+
+  it("stays out of the way outside production", async () => {
+    process.env["NODE_ENV"] = "development";
+    const { assertApiTokenConfiguredInProduction } =
+      await loadSecurity(undefined);
+    expect(() => assertApiTokenConfiguredInProduction()).not.toThrow();
+  });
+});

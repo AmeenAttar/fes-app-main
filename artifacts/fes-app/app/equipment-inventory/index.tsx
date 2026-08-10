@@ -236,6 +236,9 @@ function EquipmentGridCard({
           source={{ uri: item.imageUrl! }}
           style={[styles.thumb, { backgroundColor: colors.muted }]}
           contentFit="contain"
+          accessible
+          accessibilityRole="image"
+          accessibilityLabel={`Photograph of ${item.name}`}
           transition={150}
           onError={image.onError}
         />
@@ -289,6 +292,9 @@ function EquipmentListRow({
           source={{ uri: item.imageUrl! }}
           style={[styles.listThumb, { backgroundColor: colors.muted }]}
           contentFit="contain"
+          accessible
+          accessibilityRole="image"
+          accessibilityLabel={`Photograph of ${item.name}`}
           transition={150}
           onError={image.onError}
         />

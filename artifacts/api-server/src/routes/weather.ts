@@ -53,7 +53,13 @@ const WMO_LOOKUP: Record<number, WeatherCondition> = {
   99: { condition: "Thunderstorm", iconName: "cloud-lightning" },
 };
 
-function lookupCondition(code: number, isDay: boolean): WeatherCondition {
+/*
+ * Exported for tests. These turn Open-Meteo's payload into what the widget
+ * renders; when the upstream shape shifts, they are what silently produce
+ * zeroes and blank weekdays rather than an error.
+ */
+
+export function lookupCondition(code: number, isDay: boolean): WeatherCondition {
   const entry = WMO_LOOKUP[code];
   if (!entry) return { condition: "Unknown", iconName: "cloud" };
   if (!isDay && (code === 0 || code === 1)) {
@@ -116,7 +122,7 @@ interface CacheEntry {
 
 let cache: CacheEntry | null = null;
 
-function weekdayShortFromIsoDate(iso: string): string {
+export function weekdayShortFromIsoDate(iso: string): string {
   // Open-Meteo's `daily.time[i]` is YYYY-MM-DD with no time zone. Parse it
   // as local-noon to avoid off-by-one when the server is in a different TZ.
   const d = new Date(`${iso}T12:00:00`);
@@ -126,12 +132,12 @@ function weekdayShortFromIsoDate(iso: string): string {
     .toUpperCase();
 }
 
-function round(n: number | undefined, fallback = 0): number {
+export function round(n: number | undefined, fallback = 0): number {
   if (typeof n !== "number" || !Number.isFinite(n)) return fallback;
   return Math.round(n);
 }
 
-function buildResponse(payload: OpenMeteoResponse): WeatherResponse {
+export function buildResponse(payload: OpenMeteoResponse): WeatherResponse {
   const current = payload.current ?? {};
   const daily = payload.daily ?? {};
 

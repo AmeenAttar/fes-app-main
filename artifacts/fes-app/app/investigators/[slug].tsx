@@ -114,6 +114,9 @@ export default function InvestigatorDetailScreen() {
             ]}
             contentFit="cover"
             transition={150}
+            accessible
+            accessibilityRole="image"
+            accessibilityLabel={`Photograph of ${data.name}`}
           />
         ) : (
           <View
@@ -123,12 +126,21 @@ export default function InvestigatorDetailScreen() {
               { backgroundColor: colors.muted, borderRadius: colors.radius },
             ]}
           >
-            <Feather name="user" size={56} color={colors.mutedForeground} />
+            <Feather
+              name="user"
+              size={56}
+              color={colors.mutedForeground}
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+            />
           </View>
         )}
       </View>
 
-      <Text style={[styles.name, { color: colors.foreground }]}>
+      <Text
+        accessibilityRole="header"
+        style={[styles.name, { color: colors.foreground }]}
+      >
         {data.name}
       </Text>
       {data.title ? (
